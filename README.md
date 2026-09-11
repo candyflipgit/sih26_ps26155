@@ -170,6 +170,19 @@ The offline row is the deployment story for a national-security operator: the sa
 against open weights on the operator's own hardware, and no configuration data ever leaves the
 premises.
 
+**Choosing a model.** Model ids change — providers retire them. If suggestions never appear but the
+key is valid, a dead model id is the likely cause: the API logs a warning and falls back to queueing
+commands for review rather than erroring, which is by design but hides the reason. To see what your
+account can actually call, and to benchmark them against a known answer key:
+
+```bash
+cd backend && python scripts/bench_models.py
+```
+
+On the bundled MikroTik sample, `qwen/qwen3.8-27b` scored 14/15 in 3.2 s. Notably `gpt-oss-120b` did
+*worse* — it invented a mapping for a command no parameter covers, which the smaller models correctly
+declined. For extraction against a closed vocabulary, bigger is not safer.
+
 ### 4. Tests
 
 ```bash

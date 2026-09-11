@@ -142,5 +142,30 @@ far more widely than the configuration it describes.
 | Normalisation coverage | 67.9% | 78.9% | 100% | 0% → teachable |
 | End-to-end latency | ~12 ms | ~8 ms | ~10 ms | ~6 ms |
 
-23 controls × 4 frameworks · 24 canonical parameters · 87 shipped mappings · **92 tests passing**.
+23 controls × 4 frameworks · 24 canonical parameters · 86 shipped mappings · **92 tests passing**.
 Teaching a mapping and re-recognising it takes ~400 ms end to end.
+
+## 9. Model selection, measured
+
+Four open-weight models available on the inference endpoint were benchmarked on the same fifteen
+unrecognised MikroTik commands, against a hand-written answer key in which five commands have **no**
+correct mapping — declining them is the right answer, not a failure.
+
+| Model | Time | Correct | Wrong | Correctly declined | Missed |
+|---|---|---|---|---|---|
+| **qwen3.8-27b** | **3.2 s** | **10** | **0** | **4** | 1 |
+| gpt-oss-20b | 3.5 s | 10 | 0 | 4 | 1 |
+| gpt-oss-120b | 5.0 s | 9 | 1 | 3 | 2 |
+| qwen3.6-27b | — | — | — | — | rejects JSON response format |
+
+The result worth noting is that **the largest model was the worst**. gpt-oss-120b invented a mapping
+for `/ip ssh set allow-none-crypto=no`, a command no canonical parameter covers, while both 27B-class
+models correctly declined it. For extraction against a closed vocabulary, a bigger model is not a
+safer one — it is more willing to reach. The system is designed so that this costs coverage rather
+than correctness, but it is also why model choice here is an empirical question rather than a
+"pick the biggest" one.
+
+The fourth row is equally instructive: qwen3.6-27b returns HTTP 400 because it does not implement the
+JSON response format. The scan did not fail. The provider logged the error and every command fell
+through to human review, which is the designed behaviour for an inference failure.
+`scripts/bench_models.py` reproduces the table.
