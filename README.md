@@ -48,38 +48,101 @@ learning path on a vendor with no parser.
 
 ## Setup
 
-**Requirements:** Python 3.11+ and Node 18+. No database server, no GPU, no Docker required.
+**Requirements:** Python 3.11–3.13 and Node 18+. No database server, no GPU, no Docker.
+You will need **two terminals** — one for the API, one for the UI — and they stay running.
 
-### 1. Backend
+### 1. Clone
 
 ```bash
-git clone <your-repo-url> netbaseline && cd netbaseline
+git clone https://github.com/candyflipgit/sih26_ps26155.git netbaseline
+```
+
+```bash
+cd netbaseline
+```
+
+### 2. Backend — terminal one
+
+Create the virtual environment:
+
+```bash
 python -m venv .venv
 ```
 
-Activate the environment — `.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on
-macOS or Linux — then:
+Activate it. **Windows PowerShell:**
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+**macOS / Linux:**
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies and create your local config:
 
 ```bash
 pip install -r backend/requirements.txt
-cd backend && cp .env.example .env
 ```
 
-Start the API:
-
 ```bash
-cd backend && python -m uvicorn app.main:app --reload --port 8077
+cd backend
 ```
 
-### 2. Frontend
+```bash
+cp .env.example .env
+```
 
-In a second terminal:
+On Windows `cmd.exe` use `copy .env.example .env` instead. PowerShell and Git Bash both accept `cp`.
+
+Now start the API — **you are already inside `backend/`, do not `cd` again**:
 
 ```bash
-cd frontend && npm install && npm run dev
+python -m uvicorn app.main:app --reload --port 8077
+```
+
+Leave it running. First start takes ~20 seconds: it downloads a ~130 MB embedding model
+(`bge-small`, ONNX) into a local cache. Subsequent starts are instant. On Windows you will see a
+`huggingface_hub` warning about symlinks — that is expected and harmless.
+
+Wait for `Application startup complete.` before moving on.
+
+### 3. Frontend — terminal two
+
+Open a **new** terminal in the same project folder. The frontend needs no Python environment, so
+there is nothing to activate here:
+
+```bash
+cd frontend
+```
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
 ```
 
 Open **http://localhost:5173**. Interactive API docs are at **http://localhost:8077/docs**.
+
+The UI proxies `/api` to `127.0.0.1:8077`, so both servers must be running. If the sidebar shows
+mapping counts and a status line, the two are talking to each other.
+
+### 4. Check it works
+
+Click **Cisco Catalyst 9300** on the Analyse screen. You should get a 41% score, 13 findings, and a
+device identity showing serial `FCW2447L0GH`. If you do, the whole pipeline is working.
+
+To verify from the command line instead, in a third terminal with the venv activated:
+
+```bash
+cd backend && python -m pytest tests/ -q
+```
+
+92 tests should pass in about two seconds.
 
 ### 3. Inference endpoint (optional)
 
@@ -119,7 +182,56 @@ cd backend && python -m pytest tests/ -q
 cd backend && python scripts/reset_demo.py
 ```
 
-Removes learned mappings and scan history; leaves the shipped rule packs untouched.
+Removes learned mappings and scan history; leaves the shipped rule packs untouched. Safe to run
+while the server is up.
+
+---
+
+## Troubleshooting
+
+Verified against a fresh clone on a clean machine. These are the things that actually go wrong.
+
+**`ModuleNotFoundError: No module named 'fastapi'`**
+The virtual environment is not active in that terminal. Every new terminal needs it activated again.
+Your prompt should show `(.venv)`. Re-run the activate command from step 2.
+
+**`can't open file '...\frontend\scripts\...'` or `no such file or directory`**
+You are in the wrong folder. The API runs from `backend/`, the UI from `frontend/`. After
+`cd backend` you do **not** `cd backend` again.
+
+**`[Errno 10048] address already in use` (or `EADDRINUSE`)**
+Something already holds the port — often an earlier run of this app. Either stop it, or use another
+port: `--port 8078` for the API. If you change the API port, update the `proxy` target in
+`frontend/vite.config.js` to match, or the UI will load but show no data.
+
+**The UI loads but everything is empty, or "Request failed"**
+The API is not running, or is on a different port than the proxy expects. Check
+http://localhost:8077/api/v1/health returns `{"status":"ok"}`. Both servers must be running at once.
+
+**First startup hangs for ~20 seconds**
+Expected. It is downloading the ~130 MB embedding model. Wait for `Application startup complete.`
+Later starts are immediate.
+
+**Windows warning about symlinks and Developer Mode**
+Harmless, from `huggingface_hub`. Ignore it.
+
+**No internet on the machine**
+It still runs. The embedding model falls back to offline character n-gram TF-IDF, and the startup log
+says which backend it chose. Only retrieval quality changes; parsing, compliance and reporting are
+unaffected.
+
+**`pip install` fails resolving a version**
+The pins were built on Python 3.13 and verified on 3.11+. Check with `python --version`. Python 3.14
+and 3.10 are untested — if you are on one of those, install without pins:
+`pip install fastapi uvicorn[standard] pydantic pydantic-settings sqlalchemy python-multipart httpx reportlab numpy scikit-learn pytest jinja2 fastembed`
+
+**`npm install` fails or the UI will not start**
+Delete `frontend/node_modules` and `package-lock.json` is *not* to be deleted — it pins the working
+versions. Re-run `npm install`. Node 18 or newer is required; check with `node --version`.
+
+**Everything installed but you want to confirm before demoing**
+`cd backend && python -m pytest tests/ -q` — 92 tests, about two seconds. If those pass, the engine
+is sound regardless of what the UI is doing.
 
 ---
 
