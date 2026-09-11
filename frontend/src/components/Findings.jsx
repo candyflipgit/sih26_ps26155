@@ -132,8 +132,9 @@ export default function Findings({ analysis, goTo }) {
               {summary.not_applicable} control{summary.not_applicable === 1 ? ' does' : 's do'} not
               apply to this class of device.
             </strong>{' '}
-            A {analysis.detection.display_name} has no login banner, NTP client or local accounts,
-            so those controls are reported as not applicable — not as undetermined, and not as
+            {/^[aeiou]/i.test(analysis.detection.display_name) ? 'An' : 'A'}{' '}
+            {analysis.detection.display_name} has no login banner, NTP client or local accounts, so
+            those controls are reported as not applicable — not as undetermined, and not as
             failures. They are excluded from both the score and the coverage figure.
           </Banner>
         </div>

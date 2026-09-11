@@ -1,0 +1,19 @@
+# Binary deliverables must never pass through line-ending conversion.
+#
+# A ReportLab PDF can have no NUL byte in its first 8 KB, so git's heuristic
+# classifies it as text, and core.autocrlf will then rewrite CRLF byte pairs
+# inside its compressed streams. The file still has a .pdf extension but no
+# longer opens. Declaring these binary makes git store and restore them byte for
+# byte.
+
+*.pdf   binary
+*.pptx  binary
+*.docx  binary
+*.xlsx  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.zip   binary
+*.db    binary
