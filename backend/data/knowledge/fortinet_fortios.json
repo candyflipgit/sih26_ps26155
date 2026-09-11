@@ -1,0 +1,190 @@
+{
+  "vendor": "fortinet_fortios",
+  "display_name": "Fortinet FortiGate (FortiOS)",
+  "os_family": "FortiOS",
+  "block_style": "config_end",
+  "comment_prefixes": ["#"],
+  "signatures": {
+    "config system global": 4.0,
+    "set allowaccess": 3.5,
+    "config firewall policy": 3.0,
+    "config system interface": 2.5,
+    "set vdom": 2.0,
+    "fortigate": 3.0,
+    "config log syslogd setting": 2.5,
+    "set admintimeout": 2.5,
+    "config system admin": 2.0
+  },
+  "identity": [
+    { "field": "hostname",      "regex": "set hostname \"?([\\w.-]+)\"?" },
+    { "field": "os_version",    "regex": "Version:\\s+\\S+\\s+(v[\\d.]+)" },
+    { "field": "model",         "regex": "Version:\\s+(FortiGate-\\S+?)\\s+v|^Model:\\s+(\\S+)" },
+    { "field": "serial_number", "regex": "Serial-Number:\\s+(\\S+)" }
+  ],
+
+  "rules": [
+    { "id": "forti-allowaccess-telnet", "regex": "^set allowaccess\\b.*\\btelnet\\b",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:true",
+      "description": "An interface permits Telnet administrative access." },
+
+    { "id": "forti-allowaccess-no-telnet", "regex": "^set allowaccess\\b",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:false",
+      "description": "The interface access list does not include Telnet." },
+
+    { "id": "forti-allowaccess-http", "regex": "^set allowaccess\\b.*\\bhttp\\b",
+      "parameter": "management.http.enabled", "value_rule": "literal:true",
+      "description": "An interface permits plaintext HTTP administrative access." },
+
+    { "id": "forti-allowaccess-no-http", "regex": "^set allowaccess\\b",
+      "parameter": "management.http.enabled", "value_rule": "literal:false",
+      "description": "The interface access list does not include plaintext HTTP." },
+
+    { "id": "forti-allowaccess-https", "regex": "^set allowaccess\\b.*\\bhttps\\b",
+      "parameter": "management.https.enabled", "value_rule": "literal:true",
+      "description": "An interface permits HTTPS administrative access." },
+
+    { "id": "forti-allowaccess-ssh", "regex": "^set allowaccess\\b.*\\bssh\\b",
+      "parameter": "management.ssh.enabled", "value_rule": "literal:true",
+      "description": "An interface permits SSH administrative access." },
+
+    { "id": "forti-ssh-v1-on", "template": "set admin-ssh-v1 enable",
+      "parameter": "management.ssh.version", "value_rule": "literal:1",
+      "description": "SSH protocol version 1 is permitted on the administrative interface." },
+
+    { "id": "forti-ssh-v1-off", "template": "set admin-ssh-v1 disable",
+      "parameter": "management.ssh.version", "value_rule": "literal:2",
+      "description": "SSH protocol version 1 is disabled, leaving only version 2." },
+
+    { "id": "forti-strong-crypto-on", "template": "set strong-crypto enable",
+      "parameter": "management.ssh.strong_crypto", "value_rule": "literal:true",
+      "description": "Strong cryptography mode restricts SSL and SSH to approved algorithms." },
+
+    { "id": "forti-strong-crypto-off", "template": "set strong-crypto disable",
+      "parameter": "management.ssh.strong_crypto", "value_rule": "literal:false",
+      "description": "Strong cryptography mode is disabled, so weaker algorithms remain negotiable." },
+
+    { "id": "forti-admintimeout", "template": "set admintimeout <NUM>",
+      "parameter": "access.idle_timeout.seconds", "value_rule": "slot:0:minutes_to_seconds",
+      "description": "Administrative idle timeout, configured in minutes." },
+
+    { "id": "forti-trusthost", "regex": "^set trusthost\\d*\\b",
+      "parameter": "access.management_acl.enabled", "value_rule": "literal:true",
+      "description": "An administrator account is restricted to specific trusted source networks." },
+
+    { "id": "forti-banner-pre", "template": "set pre-login-banner enable",
+      "parameter": "access.login_banner.present", "value_rule": "literal:true",
+      "description": "A banner is displayed before administrative login." },
+
+    { "id": "forti-banner-post", "template": "set post-login-banner enable",
+      "parameter": "access.login_banner.present", "value_rule": "literal:true",
+      "description": "A banner is displayed after administrative login." },
+
+    { "id": "forti-banner-off", "regex": "^set (pre|post)-login-banner disable",
+      "parameter": "access.login_banner.present", "value_rule": "literal:false",
+      "description": "The login banner is explicitly disabled." },
+
+    { "id": "forti-password-policy-len", "template": "set minimum-length <NUM>", "context": "password-policy",
+      "parameter": "authentication.password.min_length", "value_rule": "slot:0",
+      "description": "Minimum password length enforced by the password policy." },
+
+    { "id": "forti-syslog-status", "regex": "^set status enable", "context": "log syslogd",
+      "parameter": "logging.remote_syslog.enabled", "value_rule": "literal:true",
+      "description": "Remote syslog forwarding is enabled." },
+
+    { "id": "forti-log-admin", "regex": "^set (log-admin|admin-audit)\\b.*enable",
+      "parameter": "logging.admin_actions.enabled", "value_rule": "literal:true",
+      "description": "Administrative activity is written to the event log." },
+
+    { "id": "forti-log-local", "regex": "^set status enable", "context": "log disk",
+      "parameter": "logging.local.enabled", "value_rule": "literal:true",
+      "description": "Local disk logging is enabled." },
+
+    { "id": "forti-log-memory", "regex": "^set status enable", "context": "log memory",
+      "parameter": "logging.local.enabled", "value_rule": "literal:true",
+      "description": "Local memory logging is enabled." },
+
+    { "id": "forti-ntp-sync", "template": "set ntpsync enable",
+      "parameter": "time.ntp.enabled", "value_rule": "literal:true",
+      "description": "NTP time synchronisation is enabled." },
+
+    { "id": "forti-ntp-auth", "regex": "^set authentication enable", "context": "ntp",
+      "parameter": "time.ntp.authenticated", "value_rule": "literal:true",
+      "description": "NTP authentication is enabled." },
+
+    { "id": "forti-snmp-default-community", "regex": "^set name \"?(public|private)\"?", "context": "snmp community",
+      "parameter": "snmp.default_community.present", "value_rule": "literal:true",
+      "description": "A well-known default SNMP community string is configured." },
+
+    { "id": "forti-snmp-community", "regex": "^set name\\b", "context": "snmp community",
+      "parameter": "snmp.insecure_version_enabled", "value_rule": "literal:true",
+      "description": "An SNMP community implies v1/v2c access, which is unauthenticated and cleartext." },
+
+    { "id": "forti-snmp-enabled", "regex": "^set status enable", "context": "snmp",
+      "parameter": "snmp.enabled", "value_rule": "literal:true",
+      "description": "The SNMP agent is enabled." },
+
+    { "id": "forti-admin-account", "regex": "^edit \"?(admin|root|guest)\"?", "context": "system admin",
+      "parameter": "authentication.default_accounts.present", "value_rule": "literal:true",
+      "description": "A well-known default administrator account name is configured." },
+
+    { "id": "forti-aaa", "regex": "^set (server|secret)\\b", "context": "user radius",
+      "parameter": "authentication.aaa.enabled", "value_rule": "literal:true",
+      "description": "A remote RADIUS authentication server is configured." }
+  ],
+
+  "ignore": [
+    "^set (vdom|alias|role|uuid|comment|comments|device-identification|snmp-index) ",
+    "^set (srcintf|dstintf|srcaddr|dstaddr|schedule|action|service|nat|logtraffic|utm-status) ",
+    "^set (ip|allowaccess-group|type|mode|syncinterval|contact-info|location|interval) ",
+    "^set (accprofile|two-factor|admin-lockout-\\w+|min-(lower|upper)-case-letter|min-non-alphanumeric|min-number) ",
+    "^set (admin-port|admin-sport|admin-ssh-port|admin-https-redirect|admin-maintainer) ",
+    "^set (name|server|port|source-ip|facility|format|priority) ",
+    "^set password enc\\b",
+    "^set status enable$"
+  ],
+
+  "defaults": [
+    { "parameter": "management.telnet.enabled", "value": false,
+      "rationale": "No interface access list includes Telnet." },
+    { "parameter": "management.http.enabled", "value": false,
+      "rationale": "No interface access list includes plaintext HTTP." },
+    { "parameter": "management.https.enabled", "value": false,
+      "rationale": "No interface access list includes HTTPS." },
+    { "parameter": "management.ssh.enabled", "value": false,
+      "rationale": "No interface access list includes SSH." },
+    { "parameter": "management.ssh.strong_crypto", "value": false,
+      "rationale": "'set strong-crypto enable' is absent, so FortiOS permits its wider default algorithm set." },
+    { "parameter": "time.ntp.enabled", "value": false,
+      "rationale": "NTP synchronisation is not enabled in the system NTP stanza." },
+    { "parameter": "time.ntp.authenticated", "value": false,
+      "rationale": "NTP authentication is not enabled." },
+    { "parameter": "logging.remote_syslog.enabled", "value": false,
+      "rationale": "No enabled syslogd setting was found." },
+    { "parameter": "logging.local.enabled", "value": false,
+      "rationale": "Neither disk nor memory logging was found enabled." },
+    { "parameter": "logging.admin_actions.enabled", "value": false,
+      "rationale": "Administrative audit logging was not found enabled." },
+    { "parameter": "snmp.enabled", "value": false,
+      "rationale": "No SNMP stanza appears in the configuration." },
+    { "parameter": "snmp.insecure_version_enabled", "value": false,
+      "rationale": "No SNMP community is configured." },
+    { "parameter": "snmp.default_community.present", "value": false,
+      "rationale": "No default community string is configured." },
+    { "parameter": "authentication.aaa.enabled", "value": false,
+      "rationale": "No remote authentication server is configured." },
+    { "parameter": "authentication.default_accounts.present", "value": false,
+      "rationale": "No well-known default administrator name appears in the configuration." },
+    { "parameter": "authentication.privileged.protected", "value": true,
+      "rationale": "FortiOS stores administrator credentials hashed and does not expose a reversible privileged password." },
+    { "parameter": "authentication.password.encryption_enabled", "value": true,
+      "rationale": "FortiOS stores administrator passwords as hashes in the configuration." },
+    { "parameter": "access.login_banner.present", "value": false,
+      "rationale": "Neither pre-login nor post-login banner is enabled." },
+    { "parameter": "access.management_acl.enabled", "value": false,
+      "rationale": "No administrator account defines a trusted host restriction." },
+    { "parameter": "services.source_routing.enabled", "value": false,
+      "rationale": "FortiOS does not honour source-routed packets by default." },
+    { "parameter": "services.insecure_smallservers.enabled", "value": false,
+      "rationale": "FortiOS does not provide the legacy TCP/UDP small services." }
+  ]
+}

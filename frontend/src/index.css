@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #070a0e;
+  --color-surface: #0d1219;
+  --color-panel: #131a24;
+  --color-raised: #1a232f;
+  --color-line: #24303f;
+  --color-line-soft: #1b2530;
+
+  --color-text: #e6edf5;
+  --color-muted: #8b9bb0;
+  --color-faint: #5f7086;
+
+  --color-accent: #4c9aff;
+  --color-accent-dim: #1e3a5f;
+
+  --color-critical: #ff5a5f;
+  --color-high: #ff8f3c;
+  --color-medium: #f0c000;
+  --color-low: #5aa9e6;
+  --color-pass: #35d0a5;
+  --color-unknown: #7d8da3;
+
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars styled to match the console aesthetic rather than the OS. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ink);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 5px;
+  border: 2px solid var(--color-ink);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #33445a;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(76 154 255 / 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgb(76 154 255 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(76 154 255 / 0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.28s ease-out both;
+}
+
+.animate-ring {
+  animation: pulse-ring 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-ring {
+    animation: none;
+  }
+}

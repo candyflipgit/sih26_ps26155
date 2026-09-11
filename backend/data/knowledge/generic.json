@@ -1,0 +1,29 @@
+{
+  "vendor": "generic",
+  "display_name": "Unrecognised vendor",
+  "os_family": "",
+  "block_style": "key_path",
+  "signatures": {},
+  "comment_prefixes": [
+    "#",
+    "!",
+    ";"
+  ],
+  "identity": [
+    {
+      "field": "hostname",
+      "regex": "(?:^|\\n)\\s*(?:set )?(?:system )?host-?name[ =\"]+([\\w.-]+)|identity set name=\"?([\\w.-]+)"
+    },
+    {
+      "field": "serial_number",
+      "regex": "[Ss]erial[- ][Nn]umber\\s*[:=]\\s*(\\S+)"
+    },
+    {
+      "field": "model",
+      "regex": "(?:^|\\n)\\s*[Mm]odel\\s*[:=]\\s*(\\S+)"
+    }
+  ],
+  "rules": [],
+  "defaults": [],
+  "ignore": []
+}

@@ -1,0 +1,444 @@
+{
+  "version": "1.0",
+  "templates": {
+    "REM-TELNET-001": {
+      "title": "Disable Telnet management access",
+      "summary": "Remove Telnet from every administrative access path and rely on SSH.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " line vty 0 15", "  transport input ssh", " exit", "end", "write memory"],
+          "note": "Apply to every VTY range. A device with two VTY blocks can permit Telnet on one while the other is SSH-only."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "delete system services telnet", "commit and-quit"],
+          "note": "Confirm an SSH session is available before committing, or you may lose remote access."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system interface", "  edit <interface>", "    set allowaccess ping https ssh", "  next", "end"],
+          "note": "allowaccess replaces the whole list, so restate every protocol you intend to keep."
+        }
+      },
+      "generic": "Locate the setting that governs which protocols may reach the administrative interface, and remove Telnet from it. Verify an encrypted alternative such as SSH is working first."
+    },
+
+    "REM-SNMP-002": {
+      "title": "Remove default SNMP community strings",
+      "summary": "Delete the well-known 'public' and 'private' communities and move to SNMPv3.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " no snmp-server community public", " no snmp-server community private", " snmp-server group SECURE v3 priv", " snmp-server user <user> SECURE v3 auth sha <auth-pass> priv aes 128 <priv-pass>", "end", "write memory"],
+          "note": "Update every monitoring system that polls this device before removing the old communities."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "delete snmp community public", "delete snmp community private", "set snmp v3 usm local-engine user <user> authentication-sha authentication-password <auth-pass>", "set snmp v3 usm local-engine user <user> privacy-aes128 privacy-password <priv-pass>", "commit and-quit"],
+          "note": "Update your NMS to poll with SNMPv3 credentials before committing."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system snmp community", "  delete <community-id>", "end", "config system snmp user", "  edit <user>", "    set security-level auth-priv", "    set auth-proto sha256", "    set priv-proto aes256", "  next", "end"],
+          "note": "List existing entries with 'show system snmp community' to find the id to delete."
+        }
+      },
+      "generic": "Delete any community string matching a vendor default and replace community-based polling with SNMPv3 using authentication and privacy."
+    },
+
+    "REM-SSH-001": {
+      "title": "Restrict SSH to protocol version 2",
+      "summary": "Disable SSH protocol version 1.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " ip ssh version 2", "end", "write memory"],
+          "note": "Requires an RSA key of at least 2048 bits; generate one with 'crypto key generate rsa modulus 2048' if none exists."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system services ssh protocol-version v2", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config system global", "  set admin-ssh-v1 disable", "end"],
+          "note": "Availability of this setting varies by FortiOS release; confirm with 'show full-configuration system global'."
+        }
+      },
+      "generic": "Configure the SSH server to accept only protocol version 2."
+    },
+
+    "REM-HTTP-001": {
+      "title": "Disable the plaintext HTTP management server",
+      "summary": "Turn off unencrypted web administration.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " no ip http server", " ip http secure-server", "end", "write memory"],
+          "note": "Enabling the secure server first avoids losing web management entirely."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "delete system services web-management http", "set system services web-management https system-generated-certificate", "commit and-quit"],
+          "note": "Replace the system-generated certificate with a CA-issued one for production use."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system interface", "  edit <interface>", "    set allowaccess ping https ssh", "  next", "end"],
+          "note": "Removing http from allowaccess disables the plaintext administrative interface."
+        }
+      },
+      "generic": "Disable the unencrypted web administration listener and ensure the HTTPS equivalent is available first."
+    },
+
+    "REM-SNMP-001": {
+      "title": "Disable SNMP v1 and v2c",
+      "summary": "Replace community-based SNMP with SNMPv3.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " no snmp-server community <community>", " snmp-server group SECURE v3 priv", " snmp-server user <user> SECURE v3 auth sha <auth-pass> priv aes 128 <priv-pass>", "end", "write memory"],
+          "note": "Run 'show running-config | include snmp-server community' to enumerate every community first."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "delete snmp community", "set snmp v3 usm local-engine user <user> authentication-sha authentication-password <auth-pass>", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config system snmp community", "  delete <community-id>", "end"],
+          "note": "Configure an SNMPv3 user under 'config system snmp user' before removing v2c access."
+        }
+      },
+      "generic": "Remove community-string based SNMP access and configure SNMPv3 with authentication and privacy."
+    },
+
+    "REM-AUTH-001": {
+      "title": "Protect privileged mode with a hashed secret",
+      "summary": "Replace reversible privileged passwords with a strong hash.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " no enable password", " enable algorithm-type scrypt secret <strong-passphrase>", "end", "write memory"],
+          "note": "'enable secret' supersedes 'enable password'; remove the latter so it cannot be used."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system root-authentication plain-text-password", "commit and-quit"],
+          "note": "Junos prompts for the password and stores only its hash. Do not use plain-text-password-value, which writes the credential into the configuration."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system admin", "  edit <admin-user>", "    set password <strong-passphrase>", "  next", "end"],
+          "note": "FortiOS stores administrator credentials hashed; no reversible privileged password exists to remove."
+        }
+      },
+      "generic": "Ensure privilege escalation requires a credential stored as a strong one-way hash rather than a reversible encoding."
+    },
+
+    "REM-AUTH-002": {
+      "title": "Encrypt stored passwords",
+      "summary": "Prevent credentials being written to the configuration in cleartext.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " service password-encryption", "end", "write memory"],
+          "note": "Type 7 encoding is reversible and only stops shoulder-surfing. Migrate local accounts to 'username <name> algorithm-type scrypt secret <pass>' for real protection."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system login user <user> authentication plain-text-password", "commit and-quit"],
+          "note": "Entering the password interactively stores only its hash. Replace any existing plain-text-password-value entries."
+        }
+      },
+      "generic": "Ensure locally stored credentials are hashed rather than written into the configuration in readable form."
+    },
+
+    "REM-AUTH-003": {
+      "title": "Enforce a minimum password length",
+      "summary": "Require locally defined accounts to use passwords of at least 12 characters.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " security passwords min-length 12", "end", "write memory"],
+          "note": "Applies to passwords set after the command; existing credentials are unaffected and must be reset."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system login password minimum-length 12", "set system login password change-type character-sets", "set system login password minimum-changes 3", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config system password-policy", "  set status enable", "  set minimum-length 12", "end"],
+          "note": ""
+        }
+      },
+      "generic": "Configure the password policy to require at least 12 characters."
+    },
+
+    "REM-AUTH-004": {
+      "title": "Configure centralised AAA",
+      "summary": "Authenticate administrators against a central TACACS+ or RADIUS service.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " aaa new-model", " tacacs server CORP", "  address ipv4 <server-ip>", "  key <shared-secret>", " exit", " aaa group server tacacs+ CORP-GROUP", "  server name CORP", " exit", " aaa authentication login default group CORP-GROUP local", " aaa authorization exec default group CORP-GROUP local", "end", "write memory"],
+          "note": "Keep the 'local' fallback so the device stays reachable if the AAA server is unavailable. Test in a second session before closing the first."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system tacplus-server <server-ip> secret <shared-secret>", "set system authentication-order [ tacplus password ]", "commit and-quit"],
+          "note": "Listing 'password' after 'tacplus' preserves local login if the server is unreachable."
+        },
+        "fortinet_fortios": {
+          "commands": ["config user radius", "  edit CORP", "    set server <server-ip>", "    set secret <shared-secret>", "  next", "end"],
+          "note": "Add the RADIUS server to an administrator user group to take effect."
+        }
+      },
+      "generic": "Point administrative authentication at a central identity service, retaining a local fallback account."
+    },
+
+    "REM-AUTH-005": {
+      "title": "Remove well-known default accounts",
+      "summary": "Delete or rename predictable account names.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " username <new-admin-name> privilege 15 algorithm-type scrypt secret <strong-passphrase>", " no username admin", "end", "write memory"],
+          "note": "Create and test the replacement account before deleting the old one, or you risk locking yourself out."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system login user <new-admin-name> class super-user", "set system login user <new-admin-name> authentication plain-text-password", "delete system login user admin", "commit and-quit"],
+          "note": "Verify the new account can log in from a separate session before committing the deletion."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system admin", "  edit <new-admin-name>", "    set accprofile super_admin", "    set password <strong-passphrase>", "  next", "  delete admin", "end"],
+          "note": "FortiOS refuses to delete the account you are currently logged in as; log in as the replacement first."
+        }
+      },
+      "generic": "Create a uniquely named administrative account, verify it works, then remove the default-named one."
+    },
+
+    "REM-LOG-001": {
+      "title": "Enable local logging",
+      "summary": "Retain log messages on the device.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " logging buffered 32768 informational", " service timestamps log datetime msec localtime show-timezone", "end", "write memory"],
+          "note": "Timestamps with the timezone make local logs correlatable with the central collector."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system syslog file messages any notice", "set system syslog file messages authorization info", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config log memory setting", "  set status enable", "end"],
+          "note": "Use 'config log disk setting' instead on models with local storage."
+        }
+      },
+      "generic": "Enable local log retention with timestamps."
+    },
+
+    "REM-LOG-002": {
+      "title": "Forward logs to a remote collector",
+      "summary": "Ship log messages off the device so they survive reboot and tampering.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " logging host <syslog-ip>", " logging trap informational", " logging source-interface <mgmt-interface>", "end", "write memory"],
+          "note": "Pinning the source interface keeps the collector's ACLs stable."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system syslog host <syslog-ip> any info", "set system syslog host <syslog-ip> source-address <mgmt-ip>", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config log syslogd setting", "  set status enable", "  set server \"<syslog-ip>\"", "  set mode reliable", "end"],
+          "note": "Reliable mode uses TCP, which avoids the silent loss possible with UDP syslog."
+        }
+      },
+      "generic": "Configure at least one external syslog destination and confirm messages are arriving."
+    },
+
+    "REM-LOG-003": {
+      "title": "Log administrative actions",
+      "summary": "Record configuration changes and privileged commands for attribution.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " archive", "  log config", "   logging enable", "   logging size 500", "   notify syslog contenttype plaintext", "   hidekeys", "  exit", " exit", "end", "write memory"],
+          "note": "'hidekeys' keeps credentials out of the change log."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system syslog file interactive-commands interactive-commands any", "set system syslog host <syslog-ip> interactive-commands any", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config log setting", "  set log-user-in-upper enable", "end", "config system global", "  set cfg-save automatic", "end"],
+          "note": "Administrative events appear in the FortiOS event log; confirm the event log is enabled and forwarded."
+        }
+      },
+      "generic": "Enable configuration-change and command accounting, and forward those records to the central collector."
+    },
+
+    "REM-NTP-001": {
+      "title": "Configure a time source",
+      "summary": "Synchronise the device clock so log timestamps are correlatable.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " ntp server <ntp-ip-1>", " ntp server <ntp-ip-2>", " clock timezone <ZONE> <offset>", "end", "write memory"],
+          "note": "Configure at least two sources so a single failure does not leave the clock drifting."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system ntp server <ntp-ip-1>", "set system ntp server <ntp-ip-2>", "set system time-zone <ZONE>", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config system ntp", "  set ntpsync enable", "  set type custom", "  config ntpserver", "    edit 1", "      set server \"<ntp-ip-1>\"", "    next", "  end", "end"],
+          "note": ""
+        }
+      },
+      "generic": "Configure at least two NTP servers and set the device timezone explicitly."
+    },
+
+    "REM-NTP-002": {
+      "title": "Authenticate NTP associations",
+      "summary": "Prevent a spoofed time source from shifting the device clock.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " ntp authentication-key 1 md5 <ntp-key>", " ntp authenticate", " ntp trusted-key 1", " ntp server <ntp-ip> key 1", "end", "write memory"],
+          "note": "The key must match the one configured on the NTP server."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system ntp authentication-key 1 type md5 value <ntp-key>", "set system ntp trusted-key 1", "set system ntp server <ntp-ip> key 1", "commit and-quit"],
+          "note": ""
+        }
+      },
+      "generic": "Configure a shared authentication key with your NTP servers and mark it trusted."
+    },
+
+    "REM-ACL-001": {
+      "title": "Restrict management access to trusted sources",
+      "summary": "Permit administrative sessions only from designated management networks.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " ip access-list standard MGMT-ACL", "  permit <mgmt-network> <wildcard>", "  deny any log", " exit", " line vty 0 15", "  access-class MGMT-ACL in", " exit", "end", "write memory"],
+          "note": "Confirm your own source address falls inside the permitted range before applying, or the session will drop."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set firewall filter PROTECT-RE term mgmt from source-address <mgmt-network>", "set firewall filter PROTECT-RE term mgmt from protocol tcp destination-port ssh", "set firewall filter PROTECT-RE term mgmt then accept", "set firewall filter PROTECT-RE term default then discard", "set interfaces lo0 unit 0 family inet filter input PROTECT-RE", "commit confirmed 5"],
+          "note": "'commit confirmed 5' rolls back automatically after five minutes unless confirmed, which protects you from locking yourself out."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system admin", "  edit <admin-user>", "    set trusthost1 <mgmt-network> <netmask>", "  next", "end"],
+          "note": "An administrator with no trusthost set is reachable from anywhere; set it on every account."
+        }
+      },
+      "generic": "Restrict the management interface so it accepts connections only from the designated administration network."
+    },
+
+    "REM-TIMEOUT-001": {
+      "title": "Set an idle session timeout",
+      "summary": "Close unattended administrative sessions automatically.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " line con 0", "  exec-timeout 10 0", " exit", " line vty 0 15", "  exec-timeout 10 0", " exit", "end", "write memory"],
+          "note": "'exec-timeout 0 0' means the session never expires; apply the timeout to console and VTY lines alike."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system login idle-timeout 10", "commit and-quit"],
+          "note": "The value is in minutes."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system global", "  set admintimeout 10", "end"],
+          "note": "The value is in minutes."
+        }
+      },
+      "generic": "Configure the administrative idle timeout to ten minutes or less."
+    },
+
+    "REM-BANNER-001": {
+      "title": "Display a legal login banner",
+      "summary": "Present an authorised-use notice before authentication.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " banner motd ^C", "  WARNING: Authorised access only. All activity is monitored and recorded.", "  Disconnect immediately if you are not an authorised user.", " ^C", "end", "write memory"],
+          "note": "Do not disclose the hostname, model or OS version in the banner; that information helps an attacker."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system login message \"WARNING: Authorised access only. All activity is monitored and recorded.\"", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config system global", "  set pre-login-banner enable", "end", "config system replacemsg admin pre_admin-disclaimer-text", "  set buffer \"WARNING: Authorised access only. All activity is monitored and recorded.\"", "end"],
+          "note": ""
+        }
+      },
+      "generic": "Configure a pre-authentication banner stating that access is restricted and monitored."
+    },
+
+    "REM-SVC-001": {
+      "title": "Disable IP source routing",
+      "summary": "Stop honouring sender-specified packet paths.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " no ip source-route", "end", "write memory"],
+          "note": "IOS enables source routing by default, so this must be set explicitly."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system no-source-route", "commit and-quit"],
+          "note": ""
+        }
+      },
+      "generic": "Disable processing of source-routed IP packets."
+    },
+
+    "REM-SVC-002": {
+      "title": "Disable legacy small servers",
+      "summary": "Turn off the echo, chargen and discard diagnostic services.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " no service tcp-small-servers", " no service udp-small-servers", " no service finger", "end", "write memory"],
+          "note": "Disabled by default since IOS 12.0, but worth stating explicitly in a hardened baseline."
+        }
+      },
+      "generic": "Disable the legacy TCP and UDP small services if the platform provides them."
+    },
+
+    "REM-SSH-002": {
+      "title": "Enable SSH for management",
+      "summary": "Provide an encrypted administrative transport.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " hostname <device-name>", " ip domain-name <domain>", " crypto key generate rsa modulus 2048", " ip ssh version 2", " line vty 0 15", "  transport input ssh", " exit", "end", "write memory"],
+          "note": "A hostname and domain name must be set before an RSA key can be generated."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system services ssh protocol-version v2", "set system services ssh root-login deny", "commit and-quit"],
+          "note": "Denying direct root login forces administrators to authenticate as themselves first."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system interface", "  edit <interface>", "    set allowaccess ping https ssh", "  next", "end"],
+          "note": ""
+        }
+      },
+      "generic": "Enable the SSH service and ensure it is reachable on the management interface."
+    },
+
+    "REM-SSH-003": {
+      "title": "Restrict SSH to strong ciphers",
+      "summary": "Remove weak ciphers and key exchange algorithms from the negotiable set.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " ip ssh server algorithm encryption aes256-gcm aes128-gcm aes256-ctr aes192-ctr aes128-ctr", " ip ssh server algorithm mac hmac-sha2-256 hmac-sha2-512", " ip ssh server algorithm kex diffie-hellman-group14-sha1 ecdh-sha2-nistp256", "end", "write memory"],
+          "note": "Supported algorithm names vary by IOS release; check 'ip ssh server algorithm encryption ?' on the device."
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system services ssh ciphers [ aes256-ctr aes192-ctr aes128-ctr ]", "set system services ssh macs [ hmac-sha2-256 hmac-sha2-512 ]", "commit and-quit"],
+          "note": ""
+        },
+        "fortinet_fortios": {
+          "commands": ["config system global", "  set strong-crypto enable", "end"],
+          "note": "strong-crypto restricts both SSL and SSH to stronger algorithms."
+        }
+      },
+      "generic": "Configure the SSH server to offer only AES-CTR or AES-GCM ciphers and SHA-2 MACs, removing 3DES and CBC modes."
+    },
+
+    "REM-HTTPS-001": {
+      "title": "Enable HTTPS for web management",
+      "summary": "If a web interface is required, serve it over TLS only.",
+      "vendors": {
+        "cisco_ios": {
+          "commands": ["configure terminal", " ip http secure-server", " no ip http server", " ip http authentication local", "end", "write memory"],
+          "note": ""
+        },
+        "juniper_junos": {
+          "commands": ["configure", "set system services web-management https system-generated-certificate", "delete system services web-management http", "commit and-quit"],
+          "note": "Replace the self-signed certificate with a CA-issued one before production use."
+        },
+        "fortinet_fortios": {
+          "commands": ["config system interface", "  edit <interface>", "    set allowaccess ping https ssh", "  next", "end"],
+          "note": ""
+        }
+      },
+      "generic": "Enable the TLS web administration listener and disable its plaintext counterpart."
+    }
+  }
+}

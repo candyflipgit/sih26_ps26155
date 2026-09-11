@@ -1,0 +1,426 @@
+{
+  "version": "1.0",
+
+  "frameworks": [
+    {
+      "key": "CIS",
+      "name": "CIS Critical Security Controls v8",
+      "publisher": "Center for Internet Security",
+      "note": "References are to CIS Controls v8 safeguard numbers. This project does not reproduce the text of any CIS Benchmark, which is separately licensed."
+    },
+    {
+      "key": "NIST",
+      "name": "NIST SP 800-53 Rev. 5",
+      "publisher": "National Institute of Standards and Technology",
+      "note": "References are to control identifiers in the SP 800-53 Rev. 5 catalogue."
+    },
+    {
+      "key": "STIG",
+      "name": "DISA Network Device Management SRG",
+      "publisher": "Defense Information Systems Agency",
+      "note": "References name the applicable requirement family rather than a version-specific V-ID, because STIG rule identifiers change with each benchmark release."
+    },
+    {
+      "key": "ISO27001",
+      "name": "ISO/IEC 27001:2022 Annex A",
+      "publisher": "ISO/IEC",
+      "note": "References are to Annex A control numbers in the 2022 revision."
+    }
+  ],
+
+  "rules": [
+    {
+      "id": "NET-TELNET-001",
+      "title": "Telnet management access must be disabled",
+      "parameter": "management.telnet.enabled",
+      "operator": "equals",
+      "expected": false,
+      "severity": "CRITICAL",
+      "description": "No administrative interface on the device may accept Telnet connections.",
+      "impact": "Telnet carries the session, including administrative credentials, as cleartext. Anyone able to observe traffic on any intermediate link can recover the password and take full control of the device.",
+      "frameworks": {
+        "CIS": ["4.6", "12.6"],
+        "NIST": ["AC-17(2)", "SC-8", "IA-5"],
+        "STIG": ["Management traffic must be transmitted over an approved encrypted path"],
+        "ISO27001": ["A.8.20", "A.8.24"]
+      },
+      "remediation_id": "REM-TELNET-001"
+    },
+    {
+      "id": "NET-SNMP-002",
+      "title": "Default SNMP community strings must not be used",
+      "parameter": "snmp.default_community.present",
+      "operator": "equals",
+      "expected": false,
+      "severity": "CRITICAL",
+      "description": "Community strings such as 'public' or 'private' must be removed.",
+      "impact": "Default community strings are published in every vendor manual and are the first thing an attacker tries. A readable community exposes the full device configuration; a writable one permits reconfiguration.",
+      "frameworks": {
+        "CIS": ["4.7", "5.2"],
+        "NIST": ["IA-5", "AC-3", "CM-6"],
+        "STIG": ["Default authenticators must be changed before deployment"],
+        "ISO27001": ["A.5.17", "A.8.21"]
+      },
+      "remediation_id": "REM-SNMP-002"
+    },
+    {
+      "id": "NET-SSH-001",
+      "title": "SSH must be restricted to protocol version 2",
+      "parameter": "management.ssh.version",
+      "operator": "greater_equal",
+      "expected": 2,
+      "severity": "HIGH",
+      "description": "The SSH server must not accept SSH protocol version 1.",
+      "impact": "SSHv1 has structural weaknesses in its integrity checking that permit session tampering, and is deprecated by every current standard.",
+      "frameworks": {
+        "CIS": ["4.2", "12.6"],
+        "NIST": ["SC-8", "SC-13", "AC-17(2)"],
+        "STIG": ["Deprecated cryptographic protocol versions must be disabled"],
+        "ISO27001": ["A.8.24"]
+      },
+      "remediation_id": "REM-SSH-001"
+    },
+    {
+      "id": "NET-HTTP-001",
+      "title": "Plaintext HTTP management must be disabled",
+      "parameter": "management.http.enabled",
+      "operator": "equals",
+      "expected": false,
+      "severity": "HIGH",
+      "description": "The unencrypted web administration server must not be running.",
+      "impact": "The HTTP management interface transmits session cookies and credentials without encryption, and widens the device's attack surface with a full web stack.",
+      "frameworks": {
+        "CIS": ["4.6", "4.8", "12.6"],
+        "NIST": ["SC-8", "CM-7"],
+        "STIG": ["Non-essential and unencrypted services must be disabled"],
+        "ISO27001": ["A.8.20", "A.8.24"]
+      },
+      "remediation_id": "REM-HTTP-001"
+    },
+    {
+      "id": "NET-SNMP-001",
+      "title": "SNMP v1/v2c must be disabled",
+      "parameter": "snmp.insecure_version_enabled",
+      "operator": "equals",
+      "expected": false,
+      "severity": "HIGH",
+      "description": "Community-string based SNMP must be replaced by SNMPv3.",
+      "impact": "SNMP v1 and v2c authenticate with a cleartext community string and provide no message integrity, so both the credential and the returned configuration data are exposed on the wire.",
+      "frameworks": {
+        "CIS": ["4.8", "12.6"],
+        "NIST": ["SC-8", "CM-7", "IA-5"],
+        "STIG": ["Unauthenticated management protocols must be disabled"],
+        "ISO27001": ["A.8.20", "A.8.21"]
+      },
+      "remediation_id": "REM-SNMP-001"
+    },
+    {
+      "id": "NET-AUTH-001",
+      "title": "Privileged mode must be protected by a hashed secret",
+      "parameter": "authentication.privileged.protected",
+      "operator": "equals",
+      "expected": true,
+      "severity": "HIGH",
+      "description": "Privilege escalation must require a strongly hashed secret rather than a reversible password.",
+      "impact": "Reversible privileged passwords can be decoded offline from a captured configuration file, turning read access to a backup into full administrative control.",
+      "frameworks": {
+        "CIS": ["4.2", "5.4"],
+        "NIST": ["AC-6", "IA-5(1)"],
+        "STIG": ["Privileged access must require strong authentication"],
+        "ISO27001": ["A.8.2", "A.5.17"]
+      },
+      "remediation_id": "REM-AUTH-001"
+    },
+    {
+      "id": "NET-AUTH-002",
+      "title": "Stored passwords must not be readable in the configuration",
+      "parameter": "authentication.password.encryption_enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "HIGH",
+      "description": "Password encryption must be enabled so credentials are not written in cleartext.",
+      "impact": "Configuration files are routinely copied to backup servers, ticketing systems and version control. Cleartext credentials in those files spread far beyond the device.",
+      "frameworks": {
+        "CIS": ["3.11", "5.2"],
+        "NIST": ["IA-5(1)", "SC-28"],
+        "STIG": ["Stored authenticators must be cryptographically protected"],
+        "ISO27001": ["A.5.17", "A.8.24"]
+      },
+      "remediation_id": "REM-AUTH-002"
+    },
+    {
+      "id": "NET-AUTH-005",
+      "title": "Well-known default accounts must be removed",
+      "parameter": "authentication.default_accounts.present",
+      "operator": "equals",
+      "expected": false,
+      "severity": "HIGH",
+      "description": "Accounts using predictable names such as admin, cisco or root must not exist.",
+      "impact": "A known account name removes half of the work in a credential attack and is the standard target of automated scanning against management interfaces.",
+      "frameworks": {
+        "CIS": ["4.7", "5.3"],
+        "NIST": ["AC-2", "IA-5"],
+        "STIG": ["Default accounts must be removed, disabled or renamed"],
+        "ISO27001": ["A.5.16", "A.8.2"]
+      },
+      "remediation_id": "REM-AUTH-005"
+    },
+    {
+      "id": "NET-LOG-002",
+      "title": "Logs must be forwarded to a remote collector",
+      "parameter": "logging.remote_syslog.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "HIGH",
+      "description": "At least one external syslog destination must be configured.",
+      "impact": "Local logs are held in volatile memory and are lost on reboot. They are also the first thing an intruder clears, so without off-box copies an incident leaves no evidence.",
+      "frameworks": {
+        "CIS": ["8.9"],
+        "NIST": ["AU-4", "AU-6", "AU-9"],
+        "STIG": ["Audit records must be offloaded to a central repository"],
+        "ISO27001": ["A.8.15", "A.8.16"]
+      },
+      "remediation_id": "REM-LOG-002"
+    },
+    {
+      "id": "NET-ACL-001",
+      "title": "Management access must be restricted to trusted sources",
+      "parameter": "access.management_acl.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "HIGH",
+      "description": "An access list or trusted-host list must limit which sources may open an administrative session.",
+      "impact": "Without a source restriction the management plane is reachable from any host that can route to the device, so a single compromised workstation anywhere on the network can reach it.",
+      "frameworks": {
+        "CIS": ["4.6", "12.2"],
+        "NIST": ["AC-3", "AC-17", "SC-7"],
+        "STIG": ["Management access must be restricted to designated management networks"],
+        "ISO27001": ["A.5.15", "A.8.20"]
+      },
+      "remediation_id": "REM-ACL-001"
+    },
+    {
+      "id": "NET-SSH-003",
+      "title": "SSH must use strong ciphers and key exchange",
+      "parameter": "management.ssh.strong_crypto",
+      "operator": "equals",
+      "expected": true,
+      "severity": "MEDIUM",
+      "description": "Weak SSH ciphers such as 3DES and CBC-mode algorithms must be explicitly disabled.",
+      "impact": "Legacy cipher suites remain negotiable unless explicitly removed, allowing a downgrade to algorithms with known weaknesses.",
+      "frameworks": {
+        "CIS": ["3.10", "12.6"],
+        "NIST": ["SC-13", "SC-8(1)"],
+        "STIG": ["Only approved cryptographic algorithms may be used"],
+        "ISO27001": ["A.8.24"]
+      },
+      "remediation_id": "REM-SSH-003"
+    },
+    {
+      "id": "NET-AUTH-003",
+      "title": "A minimum password length must be enforced",
+      "parameter": "authentication.password.min_length",
+      "operator": "greater_equal",
+      "expected": 12,
+      "severity": "MEDIUM",
+      "description": "Locally defined accounts must require a password of at least 12 characters.",
+      "impact": "Short passwords fall quickly to offline cracking once a configuration file or hash is obtained.",
+      "frameworks": {
+        "CIS": ["5.2"],
+        "NIST": ["IA-5(1)"],
+        "STIG": ["Password length requirements must be enforced"],
+        "ISO27001": ["A.5.17"]
+      },
+      "remediation_id": "REM-AUTH-003"
+    },
+    {
+      "id": "NET-AUTH-004",
+      "title": "Centralised AAA should be configured",
+      "parameter": "authentication.aaa.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "MEDIUM",
+      "description": "Authentication should be delegated to a central TACACS+ or RADIUS service.",
+      "impact": "Local-only accounts cannot be revoked centrally, so an administrator who leaves the organisation retains access to every device provisioned with a local credential.",
+      "frameworks": {
+        "CIS": ["5.6", "6.7"],
+        "NIST": ["IA-2", "AC-2"],
+        "STIG": ["Devices must use a centralised authentication service"],
+        "ISO27001": ["A.5.16"]
+      },
+      "remediation_id": "REM-AUTH-004"
+    },
+    {
+      "id": "NET-LOG-001",
+      "title": "Local logging must be enabled",
+      "parameter": "logging.local.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "MEDIUM",
+      "description": "The device must retain log messages locally.",
+      "impact": "Without local logging there is no record available during an outage that severs connectivity to the central collector.",
+      "frameworks": {
+        "CIS": ["8.2"],
+        "NIST": ["AU-2", "AU-12"],
+        "STIG": ["The device must generate audit records"],
+        "ISO27001": ["A.8.15"]
+      },
+      "remediation_id": "REM-LOG-001"
+    },
+    {
+      "id": "NET-LOG-003",
+      "title": "Administrative actions must be logged",
+      "parameter": "logging.admin_actions.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "MEDIUM",
+      "description": "Configuration changes and administrative commands must be recorded.",
+      "impact": "Without command accounting there is no attribution for a change, so an unauthorised modification cannot be distinguished from routine maintenance.",
+      "frameworks": {
+        "CIS": ["8.5"],
+        "NIST": ["AU-3", "AU-12", "AU-2"],
+        "STIG": ["Audit records must capture privileged command execution"],
+        "ISO27001": ["A.8.15"]
+      },
+      "remediation_id": "REM-LOG-003"
+    },
+    {
+      "id": "NET-NTP-001",
+      "title": "A time source must be configured",
+      "parameter": "time.ntp.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "MEDIUM",
+      "description": "The device must synchronise its clock with at least one NTP server.",
+      "impact": "Log entries from a device with an unsynchronised clock cannot be correlated with other systems, which makes incident reconstruction and legal evidence unreliable.",
+      "frameworks": {
+        "CIS": ["8.4"],
+        "NIST": ["AU-8", "SC-45"],
+        "STIG": ["System clocks must be synchronised to an authoritative time source"],
+        "ISO27001": ["A.8.17"]
+      },
+      "remediation_id": "REM-NTP-001"
+    },
+    {
+      "id": "NET-TIMEOUT-001",
+      "title": "Idle administrative sessions must time out",
+      "parameter": "access.idle_timeout.seconds",
+      "operator": "less_equal",
+      "expected": 600,
+      "severity": "MEDIUM",
+      "description": "An idle management session must be closed within ten minutes.",
+      "impact": "An unattended session on an authenticated terminal grants full device control to anyone with physical access to that terminal.",
+      "sentinel": 0,
+      "sentinel_status": "FAIL",
+      "frameworks": {
+        "CIS": ["4.3"],
+        "NIST": ["AC-11", "AC-12"],
+        "STIG": ["Sessions must be terminated after a defined period of inactivity"],
+        "ISO27001": ["A.8.5"]
+      },
+      "remediation_id": "REM-TIMEOUT-001"
+    },
+    {
+      "id": "NET-SVC-001",
+      "title": "IP source routing must be disabled",
+      "parameter": "services.source_routing.enabled",
+      "operator": "equals",
+      "expected": false,
+      "severity": "MEDIUM",
+      "description": "The device must not honour source-routed packets.",
+      "impact": "Source routing lets a sender dictate the path a packet takes, which can be used to bypass filtering and reach networks that routing policy would otherwise protect.",
+      "frameworks": {
+        "CIS": ["4.8", "12.2"],
+        "NIST": ["CM-7", "SC-7"],
+        "STIG": ["Non-essential IP options must be disabled"],
+        "ISO27001": ["A.8.20", "A.8.21"]
+      },
+      "remediation_id": "REM-SVC-001"
+    },
+    {
+      "id": "NET-SVC-002",
+      "title": "Legacy small servers must be disabled",
+      "parameter": "services.insecure_smallservers.enabled",
+      "operator": "equals",
+      "expected": false,
+      "severity": "MEDIUM",
+      "description": "Echo, chargen and discard services must not be running.",
+      "impact": "These diagnostic services have no operational purpose on a production network and are readily abused as traffic amplifiers in denial-of-service attacks.",
+      "frameworks": {
+        "CIS": ["4.8"],
+        "NIST": ["CM-7"],
+        "STIG": ["Non-essential services must be disabled"],
+        "ISO27001": ["A.8.19"]
+      },
+      "remediation_id": "REM-SVC-002"
+    },
+    {
+      "id": "NET-SSH-002",
+      "title": "SSH must be available for management",
+      "parameter": "management.ssh.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "MEDIUM",
+      "description": "An encrypted administrative transport must be available.",
+      "impact": "If no encrypted transport is offered, administrators are pushed onto cleartext alternatives or onto console access that cannot be centrally audited.",
+      "frameworks": {
+        "CIS": ["12.6"],
+        "NIST": ["AC-17(2)", "SC-8"],
+        "STIG": ["Management sessions must use an approved encrypted protocol"],
+        "ISO27001": ["A.8.20", "A.8.24"]
+      },
+      "remediation_id": "REM-SSH-002"
+    },
+    {
+      "id": "NET-HTTPS-001",
+      "title": "HTTPS should be used where web management is required",
+      "parameter": "management.https.enabled",
+      "operator": "equals",
+      "expected": true,
+      "severity": "LOW",
+      "description": "If a web administration interface is needed, it must be the encrypted one.",
+      "impact": "This control is only meaningful alongside the requirement to disable plaintext HTTP; on its own an enabled HTTPS service still widens the attack surface.",
+      "frameworks": {
+        "CIS": ["12.6"],
+        "NIST": ["SC-8"],
+        "STIG": ["Web-based management must use TLS"],
+        "ISO27001": ["A.8.24"]
+      },
+      "remediation_id": "REM-HTTPS-001"
+    },
+    {
+      "id": "NET-NTP-002",
+      "title": "NTP peers should be authenticated",
+      "parameter": "time.ntp.authenticated",
+      "operator": "equals",
+      "expected": true,
+      "severity": "LOW",
+      "description": "NTP associations should be cryptographically authenticated.",
+      "impact": "An unauthenticated time source can be spoofed to shift the device clock, which corrupts log ordering and can bring expired certificates back into validity.",
+      "frameworks": {
+        "CIS": ["8.4"],
+        "NIST": ["AU-8(1)", "SC-45(1)"],
+        "STIG": ["Time sources must be authenticated"],
+        "ISO27001": ["A.8.17"]
+      },
+      "remediation_id": "REM-NTP-002"
+    },
+    {
+      "id": "NET-BANNER-001",
+      "title": "A legal login banner must be displayed",
+      "parameter": "access.login_banner.present",
+      "operator": "equals",
+      "expected": true,
+      "severity": "LOW",
+      "description": "A warning notice must be presented before authentication.",
+      "impact": "Many jurisdictions require an explicit notice that access is restricted and monitored before unauthorised use can be prosecuted.",
+      "frameworks": {
+        "CIS": ["4.1"],
+        "NIST": ["AC-8"],
+        "STIG": ["A DoD-approved notice and consent banner must be displayed"],
+        "ISO27001": ["A.5.15"]
+      },
+      "remediation_id": "REM-BANNER-001"
+    }
+  ]
+}

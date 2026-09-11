@@ -1,0 +1,146 @@
+# NetBaseline AI — Architecture
+
+**SIH 2026 · PS 26155 · NTRO** — AI-Driven Multi-Vendor Network Security Compliance Auditor
+
+## 1. The problem, precisely stated
+
+Security frameworks already define what a hardened device looks like. The gap is that every vendor
+expresses those controls in a different language. `ip ssh version 2`, `set system services ssh
+protocol-version v2`, and `set admin-ssh-v1 disable` are three syntaxes for one security concept.
+Hard-coded parsers solve this until a firmware update or a new vendor arrives, and then they fail
+silently.
+
+So the real problem is **semantic normalisation across an open-ended vendor set**, and the real risk
+is that the obvious fix — hand the configuration to a language model — produces a security verdict
+nobody can audit or reproduce.
+
+## 2. Governing principle
+
+> **AI interprets syntax. Rules decide compliance. Humans approve new knowledge.**
+
+The model is confined to answering *what does this command configure?* against a closed vocabulary of
+24 canonical parameters. It never answers *is this compliant?* That is decided downstream by
+comparison against a rule catalogue. The consequences are concrete: a verdict is reproducible, every
+finding cites the configuration lines behind it, and a hallucination degrades coverage rather than
+corrupting a result.
+
+## 3. Pipeline
+
+```
+ raw configuration (untrusted input)
+        │
+        ▼
+ ┌──────────────────┐  weighted signature tokens. Deterministic — identifying
+ │ VENDOR DETECTION │  Junos from `set system services` needs no model, and
+ └────────┬─────────┘  using one would add latency and a failure mode.
+          ▼
+ ┌──────────────────┐  ONE engine + per-vendor JSON rule packs.
+ │  PARSING ENGINE  │  Canonicalises `ntp server 10.0.0.1`
+ │                  │  → `ntp server <IP>` + captured slots,
+ └────────┬─────────┘  so a rule matches a command SHAPE, not a string.
+          │
+    ┌─────┴──────┐
+    ▼            ▼
+ recognised   unrecognised
+    │            │
+    │            ├─► RETRIEVAL — nearest verified mappings, as few-shot
+    │            │   precedent only. Never decides. (§5)
+    │            ▼
+    │     ┌─────────────┐  closed vocabulary · JSON only · config fenced as
+    │     │  LLM LAYER  │  data · secrets redacted before the prompt is built
+    │     └──────┬──────┘
+    │            ▼
+    │     schema validation ──► rejects unknown parameters, wrong types
+    │            ▼
+    │     ADMINISTRATOR REVIEW ──► approve → appended to the vendor rule pack
+    │            │                 on disk → recognised deterministically
+    │            │                 forever after. No retraining, no redeploy.
+    ▼            ▼
+ ┌──────────────────────────────────────────────────────┐
+ │ NORMALISED SECURITY MODEL                            │
+ │ 24 canonical parameters. Every reading carries its   │
+ │ source tier, confidence and the literal config lines │
+ └────────────────────────┬─────────────────────────────┘
+                          ▼
+ ┌──────────────────┐  Pure comparison. No AI in this module, by design.
+ │ COMPLIANCE ENGINE│  23 controls × 4 frameworks from ONE catalogue entry.
+ └────────┬─────────┘  PASS / FAIL / UNKNOWN
+          │
+   ┌──────┼───────────────┬──────────────────┐
+   ▼      ▼               ▼                  ▼
+findings  remediation   PDF report      SQLite: scan history
++evidence (curated,     (evidence,      + training audit trail
+          per-vendor)   redacted)       (who approved what, when)
+```
+
+**Stack.** React + Vite + Tailwind · FastAPI + Pydantic + SQLAlchemy · SQLite · ReportLab ·
+bge-small ONNX embeddings via fastembed (no torch) · any OpenAI-compatible inference endpoint.
+
+## 4. Four decisions that carry the design
+
+**Vendor knowledge is data, not code.** A vendor is a JSON rule pack: signature tokens, block style,
+identity patterns, mapping rules, and *default assertions* that give absence its meaning (a Cisco
+config with no `ntp server` line has NTP disabled — without this every unconfigured control would
+read UNKNOWN and the score would be meaningless). Adding a vendor requires no Python and no release.
+
+**A mapping teaches a shape, not a string.** Canonicalisation replaces variable parts of a command
+with typed placeholders and returns the captured values as slots. Teaching `ip ssh version 2`
+produces a rule keyed on `ip ssh version <NUM>` that reads the version from the slot — so
+`ip ssh version 1` is understood without being taught. This is what makes one approval durable
+rather than a single-string lookup.
+
+**Learned and shipped knowledge are the same object.** An administrator's approval is written into
+the same rule pack, in the same shape, as a rule that shipped in the box. The training loop is
+therefore not a special case bolted on the side; it is the ordinary mechanism, invoked at runtime.
+
+**Conflicts resolve toward risk.** When a configuration asserts a parameter twice and the readings
+disagree — two VTY ranges, one permitting Telnet, one not — the riskier reading wins and both lines
+are cited as evidence. In a security audit a false negative is more damaging than a false positive.
+
+## 5. Where AI is used, and where it is refused
+
+| Stage | Mechanism | Why |
+|---|---|---|
+| Vendor detection | Deterministic | Signature tokens are unambiguous. A model adds latency, not accuracy. |
+| Known syntax | Deterministic templates | Exact, instant, reproducible. Covers the majority of every real config. |
+| Retrieval | Embeddings, **advisory only** | Measured: on held-out cross-vendor commands, correct and incorrect neighbours both scored 0.74–0.80 and retrieval alone answered ~50%. Absolute similarity on CLI text is not separable enough to trust, so it supplies precedent to the model and nothing more. |
+| Unknown syntax | **LLM** | This is the genuinely hard part, and the one thing nothing else solves. If similarity search had worked, the model would be decoration. |
+| Compliance verdict | **Deterministic, no AI** | Must be reproducible and auditable. |
+| Remediation commands | **Curated templates, no AI** | A hallucinated CLI command in a report may be pasted into production. Where no verified template exists, the report says so. |
+
+**Confidence policy.** A model proposal is displayed with its confidence and reasoning but marked for
+review by default. A control backed only by an unreviewed AI reading reports **UNKNOWN** — never PASS
+or FAIL. It counts toward a verdict only after an administrator approves the mapping, at which point
+it is no longer an AI reading at all but a deterministic rule.
+
+## 6. Handling untrusted input
+
+Device configurations are credential-dense files an attacker may influence. Two boundaries are
+enforced. First, **prompt injection**: the configuration is fenced and labelled as data, and the model
+is instructed that text inside it never carries instructions — and even full compliance with an
+injected instruction could not produce a verdict, because the model has no path to one. Second,
+**secret disclosure**: password hashes, SNMP communities, pre-shared keys and private-key blocks are
+redacted before any prompt is built and before any evidence is drawn into a report, which circulates
+far more widely than the configuration it describes.
+
+## 7. Failure behaviour
+
+| Failure | Result |
+|---|---|
+| Inference endpoint down or unconfigured | Parsing, compliance, reporting and manual classification all continue. Unknown commands queue for a human. **Degraded, not stopped.** |
+| Embedding model unavailable | Falls back to character n-gram TF-IDF. No download, no network. |
+| Model returns malformed JSON or an invented parameter | Rejected at validation. The command stays unknown. |
+| No parser for the vendor | Every security-relevant line routes to the training queue. This is a supported path, not an error. |
+| Malformed rule in a pack | That rule is skipped; the scan completes. |
+
+## 8. Measured on the bundled samples
+
+| | Cisco IOS-XE | Juniper Junos | Fortinet FortiOS | MikroTik (unsupported) |
+|---|---|---|---|---|
+| Detection confidence | 1.00 | 1.00 | 1.00 | — (correctly `unknown`) |
+| Serial extracted | ✓ | ✓ | ✓ | ✓ |
+| Normalisation coverage | 67.9% | 78.9% | 100% | 0% → teachable |
+| End-to-end latency | ~12 ms | ~8 ms | ~10 ms | ~6 ms |
+
+23 controls × 4 frameworks · 24 canonical parameters · 87 shipped mappings · **92 tests passing**.
+Teaching a mapping and re-recognising it takes ~400 ms end to end.

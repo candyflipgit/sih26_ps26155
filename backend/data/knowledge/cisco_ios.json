@@ -1,0 +1,201 @@
+{
+  "vendor": "cisco_ios",
+  "display_name": "Cisco IOS / IOS-XE",
+  "os_family": "IOS-XE",
+  "block_style": "indent",
+  "comment_prefixes": ["!"],
+  "signatures": {
+    "service password-encryption": 3.0,
+    "line vty": 3.0,
+    "ip http secure-server": 2.5,
+    "snmp-server community": 1.5,
+    "cisco ios software": 4.0,
+    "boot system flash": 2.0,
+    "spanning-tree mode": 2.0,
+    "interface gigabitethernet": 1.5,
+    "enable secret": 2.0
+  },
+  "identity": [
+    { "field": "hostname",      "regex": "^hostname\\s+(\\S+)" },
+    { "field": "os_version",    "regex": "Cisco IOS Software.*?Version\\s+([\\w.()]+)|^version\\s+([\\d.]+)" },
+    { "field": "model",         "regex": "^\\s*(?:cisco\\s+)?(C\\d{4}[\\w-]*|WS-C\\d{4}[\\w-]*|ISR\\d{4}[\\w-]*|ASR\\d{4}[\\w-]*)\\b" },
+    { "field": "serial_number", "regex": "System Serial Number\\s*:\\s*(\\S+)|Processor board ID\\s+(\\S+)" }
+  ],
+
+  "rules": [
+    { "id": "cisco-ssh-version", "template": "ip ssh version <NUM>",
+      "parameter": "management.ssh.version", "value_rule": "slot:0",
+      "description": "Restricts the SSH server to the given protocol version." },
+
+    { "id": "cisco-ssh-strong-crypto", "regex": "^ip ssh server algorithm encryption\\b(?!.*(3des|cbc))",
+      "parameter": "management.ssh.strong_crypto", "value_rule": "literal:true",
+      "description": "An explicit SSH cipher list that excludes 3DES and CBC modes." },
+
+    { "id": "cisco-ssh-weak-crypto", "regex": "^ip ssh server algorithm encryption\\b.*(3des|cbc)",
+      "parameter": "management.ssh.strong_crypto", "value_rule": "literal:false",
+      "description": "SSH cipher list still permits 3DES or CBC mode ciphers." },
+
+    { "id": "cisco-telnet-permitted", "regex": "^transport input\\b.*\\b(telnet|all)\\b", "context": "line vty",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:true",
+      "description": "A VTY line accepts Telnet, which carries credentials in cleartext." },
+
+    { "id": "cisco-telnet-excluded", "regex": "^transport input\\b", "context": "line vty",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:false",
+      "description": "VTY transport list omits Telnet." },
+
+    { "id": "cisco-ssh-permitted", "regex": "^transport input\\b.*\\b(ssh|all)\\b", "context": "line vty",
+      "parameter": "management.ssh.enabled", "value_rule": "literal:true",
+      "description": "A VTY line accepts SSH." },
+
+    { "id": "cisco-http-off", "template": "no ip http server",
+      "parameter": "management.http.enabled", "value_rule": "literal:false",
+      "description": "The cleartext HTTP management server is disabled." },
+
+    { "id": "cisco-http-on", "template": "ip http server",
+      "parameter": "management.http.enabled", "value_rule": "literal:true",
+      "description": "The cleartext HTTP management server is enabled." },
+
+    { "id": "cisco-https-off", "template": "no ip http secure-server",
+      "parameter": "management.https.enabled", "value_rule": "literal:false",
+      "description": "The HTTPS management server is disabled." },
+
+    { "id": "cisco-https-on", "template": "ip http secure-server",
+      "parameter": "management.https.enabled", "value_rule": "literal:true",
+      "description": "The HTTPS management server is enabled." },
+
+    { "id": "cisco-mgmt-acl", "regex": "^access-class <NUM>( in)?", "context": "line vty",
+      "parameter": "access.management_acl.enabled", "value_rule": "literal:true",
+      "description": "An access class restricts which sources may open a management session." },
+
+    { "id": "cisco-exec-timeout", "template": "exec-timeout <NUM> <NUM>",
+      "parameter": "access.idle_timeout.seconds", "value_rule": "slot:0:minutes_to_seconds",
+      "description": "Idle timeout for administrative sessions." },
+
+    { "id": "cisco-banner", "regex": "^banner (motd|login|exec)\\b",
+      "parameter": "access.login_banner.present", "value_rule": "literal:true",
+      "description": "A legal notice banner is presented before login." },
+
+    { "id": "cisco-pwd-encryption-off", "template": "no service password-encryption",
+      "parameter": "authentication.password.encryption_enabled", "value_rule": "literal:false",
+      "description": "Passwords are stored in the configuration without encryption." },
+
+    { "id": "cisco-pwd-encryption-on", "template": "service password-encryption",
+      "parameter": "authentication.password.encryption_enabled", "value_rule": "literal:true",
+      "description": "Stored passwords are obfuscated in the running configuration." },
+
+    { "id": "cisco-pwd-minlen", "template": "security passwords min-length <NUM>",
+      "parameter": "authentication.password.min_length", "value_rule": "slot:0",
+      "description": "Minimum password length enforced for locally defined users." },
+
+    { "id": "cisco-enable-secret", "regex": "^enable secret\\b",
+      "parameter": "authentication.privileged.protected", "value_rule": "literal:true",
+      "description": "Privileged EXEC mode is protected by a hashed secret." },
+
+    { "id": "cisco-enable-password", "regex": "^enable password\\b",
+      "parameter": "authentication.privileged.protected", "value_rule": "literal:false",
+      "description": "Privileged EXEC uses the reversible 'enable password' rather than 'enable secret'." },
+
+    { "id": "cisco-aaa-off", "template": "no aaa new-model",
+      "parameter": "authentication.aaa.enabled", "value_rule": "literal:false",
+      "description": "Centralised AAA is explicitly disabled; the device authenticates against its local user database only." },
+
+    { "id": "cisco-aaa", "regex": "^aaa new-model\\b",
+      "parameter": "authentication.aaa.enabled", "value_rule": "literal:true",
+      "description": "Centralised AAA is enabled." },
+
+    { "id": "cisco-default-account", "regex": "^username (admin|cisco|root|guest|test)\\b",
+      "parameter": "authentication.default_accounts.present", "value_rule": "literal:true",
+      "description": "A well-known default account name is still configured." },
+
+    { "id": "cisco-log-buffered", "regex": "^logging buffered\\b",
+      "parameter": "logging.local.enabled", "value_rule": "literal:true",
+      "description": "Local buffered logging is enabled." },
+
+    { "id": "cisco-syslog-host", "regex": "^logging (host )?<IP>",
+      "parameter": "logging.remote_syslog.enabled", "value_rule": "literal:true",
+      "description": "Log messages are forwarded to an external collector." },
+
+    { "id": "cisco-archive-logging", "regex": "^logging enable\\b", "context": "log config",
+      "parameter": "logging.admin_actions.enabled", "value_rule": "literal:true",
+      "description": "Configuration change logging records administrative actions." },
+
+    { "id": "cisco-ntp-auth", "regex": "^ntp authenticate\\b",
+      "parameter": "time.ntp.authenticated", "value_rule": "literal:true",
+      "description": "NTP peer authentication is enabled." },
+
+    { "id": "cisco-ntp-server", "regex": "^ntp server\\b",
+      "parameter": "time.ntp.enabled", "value_rule": "literal:true",
+      "description": "At least one NTP time source is configured." },
+
+    { "id": "cisco-snmp-default-community", "regex": "^snmp-server community (public|private)\\b",
+      "parameter": "snmp.default_community.present", "value_rule": "literal:true",
+      "description": "A well-known default SNMP community string is in use." },
+
+    { "id": "cisco-snmp-v3", "regex": "^snmp-server group\\b.*\\bv3\\b",
+      "parameter": "snmp.enabled", "value_rule": "literal:true",
+      "description": "SNMPv3 with authentication and privacy is configured." },
+
+    { "id": "cisco-snmp-community", "regex": "^snmp-server community\\b",
+      "parameter": "snmp.insecure_version_enabled", "value_rule": "literal:true",
+      "description": "A community string implies SNMP v1/v2c, which is unauthenticated and cleartext." },
+
+    { "id": "cisco-snmp-host", "regex": "^snmp-server (host|enable traps)\\b",
+      "parameter": "snmp.enabled", "value_rule": "literal:true",
+      "description": "The SNMP agent is active." },
+
+    { "id": "cisco-source-route-off", "template": "no ip source-route",
+      "parameter": "services.source_routing.enabled", "value_rule": "literal:false",
+      "description": "IP source routing is disabled." },
+
+    { "id": "cisco-source-route-on", "template": "ip source-route",
+      "parameter": "services.source_routing.enabled", "value_rule": "literal:true",
+      "description": "IP source routing is enabled." },
+
+    { "id": "cisco-small-servers-off", "regex": "^no service (tcp|udp)-small-servers",
+      "parameter": "services.insecure_smallservers.enabled", "value_rule": "literal:false",
+      "description": "Legacy small servers are disabled." },
+
+    { "id": "cisco-small-servers-on", "regex": "^service (tcp|udp)-small-servers",
+      "parameter": "services.insecure_smallservers.enabled", "value_rule": "literal:true",
+      "description": "Legacy echo/chargen/discard services are enabled." }
+  ],
+
+  "defaults": [
+    { "parameter": "time.ntp.enabled", "value": false,
+      "rationale": "No 'ntp server' statement appears in the configuration, so the device has no configured time source." },
+    { "parameter": "time.ntp.authenticated", "value": false,
+      "rationale": "No 'ntp authenticate' statement appears in the configuration." },
+    { "parameter": "logging.remote_syslog.enabled", "value": false,
+      "rationale": "No 'logging host' statement appears in the configuration." },
+    { "parameter": "logging.local.enabled", "value": false,
+      "rationale": "No explicit 'logging buffered' statement appears in the configuration." },
+    { "parameter": "logging.admin_actions.enabled", "value": false,
+      "rationale": "No archive log-config logging is configured, so administrative changes are not recorded." },
+    { "parameter": "snmp.enabled", "value": false,
+      "rationale": "No snmp-server statement appears in the configuration." },
+    { "parameter": "snmp.insecure_version_enabled", "value": false,
+      "rationale": "No SNMP community string is configured." },
+    { "parameter": "snmp.default_community.present", "value": false,
+      "rationale": "No default community string is configured." },
+    { "parameter": "authentication.aaa.enabled", "value": false,
+      "rationale": "'aaa new-model' is absent, so the device authenticates locally." },
+    { "parameter": "authentication.password.encryption_enabled", "value": false,
+      "rationale": "'service password-encryption' is absent." },
+    { "parameter": "authentication.privileged.protected", "value": false,
+      "rationale": "Neither 'enable secret' nor 'enable password' is configured." },
+    { "parameter": "authentication.default_accounts.present", "value": false,
+      "rationale": "No well-known default account name appears in the configuration." },
+    { "parameter": "access.login_banner.present", "value": false,
+      "rationale": "No banner statement appears in the configuration." },
+    { "parameter": "access.management_acl.enabled", "value": false,
+      "rationale": "No access-class is applied to the VTY lines." },
+    { "parameter": "access.idle_timeout.seconds", "value": 600,
+      "rationale": "No explicit exec-timeout is set; IOS applies its 10 minute default." },
+    { "parameter": "management.ssh.strong_crypto", "value": false,
+      "rationale": "No explicit SSH algorithm restriction is configured, so platform defaults including weaker ciphers remain available." },
+    { "parameter": "services.source_routing.enabled", "value": true,
+      "rationale": "'no ip source-route' is absent and IOS enables source routing by default." },
+    { "parameter": "services.insecure_smallservers.enabled", "value": false,
+      "rationale": "TCP/UDP small servers have been disabled by default since IOS 12.0." }
+  ]
+}

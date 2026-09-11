@@ -1,0 +1,167 @@
+{
+  "vendor": "juniper_junos",
+  "display_name": "Juniper Junos (EX / MX / SRX)",
+  "os_family": "Junos",
+  "block_style": "flat_set",
+  "comment_prefixes": ["#"],
+  "signatures": {
+    "set system host-name": 4.0,
+    "set system services": 3.5,
+    "set system root-authentication": 3.0,
+    "set routing-options": 2.5,
+    "set security policies": 2.5,
+    "set interfaces ": 1.5,
+    "junos": 3.0,
+    "set system syslog": 2.5,
+    "set protocols": 1.5
+  },
+  "identity": [
+    { "field": "hostname",      "regex": "set system host-name\\s+(\\S+)" },
+    { "field": "os_version",    "regex": "Junos:\\s+(\\S+)|JUNOS Software Release \\[([^\\]]+)\\]" },
+    { "field": "model",         "regex": "^Model:\\s+(\\S+)" },
+    { "field": "serial_number", "regex": "Chassis\\s+(\\w{10,14})\\s|Serial number:\\s+(\\S+)" }
+  ],
+
+  "rules": [
+    { "id": "junos-ssh-version", "template": "set system services ssh protocol-version <VER>",
+      "parameter": "management.ssh.version", "value_rule": "slot:0:digits",
+      "description": "Restricts the SSH server to the given protocol version." },
+
+    { "id": "junos-ssh-enabled", "regex": "^set system services ssh\\b",
+      "parameter": "management.ssh.enabled", "value_rule": "literal:true",
+      "description": "The SSH service is enabled under system services." },
+
+    { "id": "junos-ssh-ciphers", "regex": "^set system services ssh ciphers\\b(?!.*(3des|cbc))",
+      "parameter": "management.ssh.strong_crypto", "value_rule": "literal:true",
+      "description": "An explicit SSH cipher list that excludes 3DES and CBC modes." },
+
+    { "id": "junos-telnet-off", "regex": "^delete system services telnet\\b",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:false",
+      "description": "The Telnet service is explicitly removed." },
+
+    { "id": "junos-telnet-on", "regex": "^set system services telnet\\b",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:true",
+      "description": "The Telnet service is enabled under system services." },
+
+    { "id": "junos-http-on", "regex": "^set system services web-management http\\b(?!s)",
+      "parameter": "management.http.enabled", "value_rule": "literal:true",
+      "description": "Plaintext web management is enabled." },
+
+    { "id": "junos-https-on", "regex": "^set system services web-management https\\b",
+      "parameter": "management.https.enabled", "value_rule": "literal:true",
+      "description": "HTTPS web management is enabled." },
+
+    { "id": "junos-idle-timeout", "template": "set system login idle-timeout <NUM>",
+      "parameter": "access.idle_timeout.seconds", "value_rule": "slot:0:minutes_to_seconds",
+      "description": "Idle timeout for administrative logins, configured in minutes." },
+
+    { "id": "junos-password-minlen", "template": "set system login password minimum-length <NUM>",
+      "parameter": "authentication.password.min_length", "value_rule": "slot:0",
+      "description": "Minimum password length for locally defined users." },
+
+    { "id": "junos-plaintext-password", "regex": "^set system login user \\S+ authentication plain-text-password",
+      "parameter": "authentication.password.encryption_enabled", "value_rule": "literal:false",
+      "description": "A local user credential is supplied in cleartext rather than as a hash." },
+
+    { "id": "junos-password-format", "regex": "^set system login password format (sha512|sha256)",
+      "parameter": "authentication.password.encryption_enabled", "value_rule": "literal:true",
+      "description": "Locally stored passwords are hashed with a strong algorithm." },
+
+    { "id": "junos-banner", "regex": "^set system login (message|announcement)\\b",
+      "parameter": "access.login_banner.present", "value_rule": "literal:true",
+      "description": "A login message is presented before authentication." },
+
+    { "id": "junos-root-auth", "regex": "^set system root-authentication encrypted-password\\b",
+      "parameter": "authentication.privileged.protected", "value_rule": "literal:true",
+      "description": "The root account is protected by an encrypted password." },
+
+    { "id": "junos-default-account", "regex": "^set system login user (admin|root|guest|test)\\b",
+      "parameter": "authentication.default_accounts.present", "value_rule": "literal:true",
+      "description": "A well-known default account name is configured." },
+
+    { "id": "junos-aaa", "regex": "^set system (tacplus-server|radius-server|authentication-order)\\b",
+      "parameter": "authentication.aaa.enabled", "value_rule": "literal:true",
+      "description": "Centralised authentication via TACACS+ or RADIUS is configured." },
+
+    { "id": "junos-syslog-host", "regex": "^set system syslog host\\b",
+      "parameter": "logging.remote_syslog.enabled", "value_rule": "literal:true",
+      "description": "Log messages are forwarded to an external collector." },
+
+    { "id": "junos-syslog-file", "regex": "^set system syslog file\\b",
+      "parameter": "logging.local.enabled", "value_rule": "literal:true",
+      "description": "Log messages are written to a local file." },
+
+    { "id": "junos-log-changes", "regex": "^set system syslog file \\S+ (change-log|interactive-commands)\\b",
+      "parameter": "logging.admin_actions.enabled", "value_rule": "literal:true",
+      "description": "Configuration changes and interactive commands are recorded." },
+
+    { "id": "junos-ntp-auth", "regex": "^set system ntp (authentication-key|trusted-key)\\b",
+      "parameter": "time.ntp.authenticated", "value_rule": "literal:true",
+      "description": "NTP associations are authenticated." },
+
+    { "id": "junos-ntp-server", "regex": "^set system ntp server\\b",
+      "parameter": "time.ntp.enabled", "value_rule": "literal:true",
+      "description": "At least one NTP time source is configured." },
+
+    { "id": "junos-snmp-default-community", "regex": "^set snmp community (public|private)\\b",
+      "parameter": "snmp.default_community.present", "value_rule": "literal:true",
+      "description": "A well-known default SNMP community string is in use." },
+
+    { "id": "junos-snmp-v3", "regex": "^set snmp v3\\b",
+      "parameter": "snmp.enabled", "value_rule": "literal:true",
+      "description": "SNMPv3 is configured." },
+
+    { "id": "junos-snmp-community", "regex": "^set snmp community\\b",
+      "parameter": "snmp.insecure_version_enabled", "value_rule": "literal:true",
+      "description": "A community string implies SNMP v1/v2c, which is unauthenticated and cleartext." },
+
+    { "id": "junos-mgmt-filter", "regex": "^set (firewall filter \\S*(re|mgmt|protect)\\S*|system services ssh connection-limit)\\b",
+      "parameter": "access.management_acl.enabled", "value_rule": "literal:true",
+      "description": "A routing-engine protection filter or connection limit constrains management access." },
+
+    { "id": "junos-no-source-route", "regex": "^set system no-source-route\\b",
+      "parameter": "services.source_routing.enabled", "value_rule": "literal:false",
+      "description": "IP source routing is disabled." }
+  ],
+
+  "defaults": [
+    { "parameter": "management.telnet.enabled", "value": false,
+      "rationale": "No 'set system services telnet' statement appears; Junos does not enable Telnet unless it is explicitly configured." },
+    { "parameter": "management.http.enabled", "value": false,
+      "rationale": "No 'set system services web-management http' statement appears." },
+    { "parameter": "management.https.enabled", "value": false,
+      "rationale": "No 'set system services web-management https' statement appears." },
+    { "parameter": "management.ssh.strong_crypto", "value": false,
+      "rationale": "No explicit SSH cipher list is configured, so platform default algorithms remain negotiable." },
+    { "parameter": "time.ntp.enabled", "value": false,
+      "rationale": "No 'set system ntp server' statement appears in the configuration." },
+    { "parameter": "time.ntp.authenticated", "value": false,
+      "rationale": "No NTP authentication key is configured." },
+    { "parameter": "logging.remote_syslog.enabled", "value": false,
+      "rationale": "No 'set system syslog host' statement appears in the configuration." },
+    { "parameter": "logging.local.enabled", "value": false,
+      "rationale": "No 'set system syslog file' statement appears in the configuration." },
+    { "parameter": "logging.admin_actions.enabled", "value": false,
+      "rationale": "No syslog file captures change-log or interactive-commands facilities." },
+    { "parameter": "snmp.enabled", "value": false,
+      "rationale": "No SNMP stanza appears in the configuration." },
+    { "parameter": "snmp.insecure_version_enabled", "value": false,
+      "rationale": "No SNMP community string is configured." },
+    { "parameter": "snmp.default_community.present", "value": false,
+      "rationale": "No default community string is configured." },
+    { "parameter": "authentication.aaa.enabled", "value": false,
+      "rationale": "No TACACS+ or RADIUS server is configured." },
+    { "parameter": "authentication.default_accounts.present", "value": false,
+      "rationale": "No well-known default account name appears in the configuration." },
+    { "parameter": "authentication.password.encryption_enabled", "value": true,
+      "rationale": "Junos stores local passwords hashed by default; no cleartext password format is configured." },
+    { "parameter": "access.login_banner.present", "value": false,
+      "rationale": "No 'set system login message' statement appears in the configuration." },
+    { "parameter": "access.management_acl.enabled", "value": false,
+      "rationale": "No routing-engine protection filter was identified." },
+    { "parameter": "services.source_routing.enabled", "value": false,
+      "rationale": "Junos does not forward source-routed packets unless explicitly configured to." },
+    { "parameter": "services.insecure_smallservers.enabled", "value": false,
+      "rationale": "Junos does not provide the legacy TCP/UDP small services." }
+  ]
+}

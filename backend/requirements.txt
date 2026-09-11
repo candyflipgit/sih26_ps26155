@@ -1,0 +1,20 @@
+# NetBaseline AI - backend dependencies
+#
+# Everything here installs from wheels on Python 3.11-3.13 with no compiler and
+# no GPU. Notably absent: torch (fastembed uses ONNX Runtime instead, ~130MB
+# rather than ~2.5GB) and any vector-database service (brute-force cosine over a
+# few hundred rules is exact and sub-millisecond at this scale).
+
+Jinja2==3.1.6
+SQLAlchemy==2.0.52
+fastapi==0.141.1
+fastembed==0.8.0
+httpx==0.28.1
+numpy==2.5.3
+pydantic-settings==2.15.0
+pydantic==2.13.5
+pytest==9.1.1
+python-multipart==0.0.32
+reportlab==5.0.1
+scikit-learn==1.9.0
+uvicorn==0.52.4
