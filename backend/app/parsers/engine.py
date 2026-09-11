@@ -275,6 +275,7 @@ def parse(config: str, pack: RulePack) -> NormalizedConfig:
                     canonical=line.canonical,
                     line_number=line.number,
                     vendor_hint=pack.vendor,
+                    context=line.context,
                 )
             )
 

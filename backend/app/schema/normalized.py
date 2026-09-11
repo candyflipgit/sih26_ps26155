@@ -76,6 +76,11 @@ class UnknownCommand(BaseModel):
     canonical: str
     line_number: int
     vendor_hint: str | None = None
+    # The enclosing configuration block, e.g. "config log syslogd setting" or
+    # "line vty 0 4". Carried through to the AI layer because a line like
+    # `set status enable` is meaningless without it -- CAIP (arXiv:2411.14283)
+    # measured a ~30% detection-accuracy gain from supplying exactly this.
+    context: str = ""
     # Best-effort AI proposal, if one was produced but scored below threshold.
     suggested_parameter: str | None = None
     suggested_value: Any = None

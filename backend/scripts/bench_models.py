@@ -51,6 +51,62 @@ CANDIDATES = [
     "qwen/qwen3.6-27b",
 ]
 
+# Ablations for the research-derived changes, so each is measured on this task
+# rather than assumed to transfer from the papers that motivated it.
+ABLATIONS = [
+    ("baseline (1 sample, no context)", {"llm_samples": 1}, False),
+    ("+ block context", {"llm_samples": 1}, True),
+    ("+ self-consistency (3)", {"llm_samples": 3}, True),
+]
+
+
+def score(proposals, commands, verbose=False):
+    """Score one run against the answer key.
+
+    Declining a command with no correct mapping counts as success, not as a
+    miss. A scorer that penalised silence would reward a model for guessing.
+    """
+    by_index = {p.index: p for p in proposals}
+    correct = wrong = declined_ok = missed = 0
+    notes: list[str] = []
+
+    for i, command in enumerate(commands):
+        want_param, want_value = ANSWER_KEY.get(command, (None, None))
+        got = by_index.get(i)
+
+        if got is None:
+            if want_param is None:
+                declined_ok += 1
+            else:
+                missed += 1
+                notes.append(f"    missed:   {command[:44]:<44} (want {want_param})")
+        elif want_param is None:
+            wrong += 1
+            notes.append(f"    invented: {command[:44]:<44} -> {got.parameter}")
+        elif got.parameter == want_param and got.value == want_value:
+            correct += 1
+        else:
+            wrong += 1
+            notes.append(f"    wrong:    {command[:44]:<44} -> {got.parameter} (want {want_param})")
+
+    if verbose:
+        for n in notes:
+            print(n)
+    return correct, wrong, declined_ok, missed
+
+
+def confidence_spread(proposals) -> str:
+    """How much signal the confidence numbers actually carry.
+
+    A run where every proposal scores 1.00 has a confidence field that cannot
+    separate anything, which is the failure this project measured directly.
+    """
+    if not proposals:
+        return "n/a"
+    values = sorted(p.confidence for p in proposals)
+    distinct = len(set(values))
+    return f"{values[0]:.2f}-{values[-1]:.2f} ({distinct} distinct)"
+
 
 def main() -> int:
     base = Settings()
@@ -61,57 +117,53 @@ def main() -> int:
     sample = (base.samples_dir / "mikrotik_branch_router.rsc").read_text(encoding="utf-8")
     unknowns = parse(sample, library.get("generic")).unknown_commands
     commands = [u.raw for u in unknowns]
+    contexts = [u.context for u in unknowns]
     examples = index.examples_for_prompt(commands[0], "unknown", base.retrieval_top_k)
+    total = len(commands)
 
-    print(f"{len(commands)} commands · one batch per model\n")
-    print(f"{'model':<24} {'time':>8} {'correct':>9} {'wrong':>7} {'declined':>9} {'missed':>7}")
-    print("-" * 70)
+    header = f"{'':<34} {'time':>7} {'right':>7} {'wrong':>7} {'missed':>7}  confidence"
+
+    print(f"=== MODELS (single sample, with context) · {total} commands ===\n")
+    print(header)
+    print("-" * 86)
 
     results = []
     for model in CANDIDATES:
-        settings = base.model_copy(update={"llm_model": model, "llm_max_batch": 16})
-        provider = OpenAICompatProvider(settings)
-
+        settings = base.model_copy(
+            update={"llm_model": model, "llm_max_batch": 16, "llm_samples": 1}
+        )
         started = time.perf_counter()
-        proposals = provider.interpret("unknown", commands, examples)
+        proposals = OpenAICompatProvider(settings).interpret(
+            "unknown", commands, examples, contexts
+        )
         elapsed = time.perf_counter() - started
+        c, w, d, m = score(proposals, commands)
+        results.append((model, elapsed, c + d))
+        print(
+            f"{model:<34} {elapsed:>6.1f}s {c + d:>7} {w:>7} {m:>7}"
+            f"  {confidence_spread(proposals)}"
+        )
 
-        by_index = {p.index: p for p in proposals}
-        correct = wrong = declined_ok = missed = 0
+    print(f"\n=== ABLATIONS on {base.llm_model} ===\n")
+    print(header)
+    print("-" * 86)
 
-        for i, command in enumerate(commands):
-            want_param, want_value = ANSWER_KEY.get(command, (None, None))
-            got = by_index.get(i)
-
-            if got is None:
-                if want_param is None:
-                    declined_ok += 1   # correctly said nothing
-                else:
-                    missed += 1        # should have mapped it
-            elif want_param is None:
-                wrong += 1             # invented a mapping where none exists
-            elif got.parameter == want_param and got.value == want_value:
-                correct += 1
-            else:
-                wrong += 1
-
-        results.append((model, elapsed, correct, wrong, declined_ok, missed))
-        print(f"{model:<24} {elapsed:>7.1f}s {correct:>9} {wrong:>7} {declined_ok:>9} {missed:>7}")
-
-        for i, command in enumerate(commands):
-            want_param, _ = ANSWER_KEY.get(command, (None, None))
-            got = by_index.get(i)
-            if got is not None and want_param is not None and got.parameter != want_param:
-                print(f"    wrong: {command[:44]:<44} -> {got.parameter} (want {want_param})")
-            elif got is not None and want_param is None:
-                print(f"    invented: {command[:42]:<42} -> {got.parameter}")
+    for label, overrides, use_context in ABLATIONS:
+        settings = base.model_copy(update={"llm_max_batch": 16, **overrides})
+        started = time.perf_counter()
+        proposals = OpenAICompatProvider(settings).interpret(
+            "unknown", commands, examples, contexts if use_context else None
+        )
+        elapsed = time.perf_counter() - started
+        c, w, d, m = score(proposals, commands, verbose=True)
+        print(
+            f"{label:<34} {elapsed:>6.1f}s {c + d:>7} {w:>7} {m:>7}"
+            f"  {confidence_spread(proposals)}"
+        )
 
     print()
-    scored = sorted(results, key=lambda r: (-(r[2] + r[4]), r[1]))
-    best = scored[0]
-    print(f"Best accuracy: {best[0]}  ({best[2] + best[4]}/{len(commands)} right, {best[1]:.1f}s)")
-    fastest = min(results, key=lambda r: r[1])
-    print(f"Fastest      : {fastest[0]}  ({fastest[1]:.1f}s, {fastest[2] + fastest[4]}/{len(commands)} right)")
+    best = max(results, key=lambda r: (r[2], -r[1]))
+    print(f"Best model: {best[0]} ({best[2]}/{total} right, {best[1]:.1f}s)")
     return 0
 
 

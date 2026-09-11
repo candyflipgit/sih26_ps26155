@@ -41,10 +41,26 @@ class Settings(BaseSettings):
     # Defaults point at Groq's OpenAI-compatible endpoint serving open weights.
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_api_key: str = ""
-    llm_model: str = "llama-3.3-70b-versatile"
+    # Benchmarked default; see scripts/bench_models.py. Model ids get retired,
+    # and a dead one fails quietly (every command falls through to human
+    # review), so run that script if suggestions stop appearing.
+    llm_model: str = "qwen/qwen3.8-27b"
     llm_timeout_seconds: float = 45.0
     llm_max_batch: int = 12
     llm_temperature: float = 0.0
+    # Samples per batch for self-consistency: confidence becomes the share of
+    # independent samples that agreed, which is a signal the model cannot simply
+    # assert. Defaults to 1 (off) on measurement, not on principle. On our
+    # context-dependent FortiOS set, three samples scored 9/10 -- identical to a
+    # single sample -- for three times the requests, and three concurrent calls
+    # are the first thing a free inference tier throttles. Raise it only where
+    # the endpoint has headroom and the task shows genuine sample-to-sample
+    # disagreement. See scripts/bench_context.py.
+    llm_samples: int = 1
+    # Free inference tiers rate-limit, and scanning several devices in a
+    # row is exactly what a demo does. A 429 means "wait", not "no".
+    llm_max_retries: int = 3
+    llm_max_backoff_seconds: float = 12.0
 
     # --- embeddings --------------------------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"

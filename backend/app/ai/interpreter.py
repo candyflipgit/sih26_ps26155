@@ -97,15 +97,18 @@ def interpret_unknowns(
     by_index: dict[int, AIProposal] = {}
     batch_size = max(1, settings.llm_max_batch)
 
+    contexts = [u.context for u in unknowns]
+
     for start in range(0, len(redacted), batch_size):
         chunk = redacted[start : start + batch_size]
+        chunk_contexts = contexts[start : start + batch_size]
 
         # Retrieval precedent is gathered per batch from the first command, which
         # keeps the prompt small; the vocabulary in the system prompt is what
         # actually constrains the model.
         examples = index.examples_for_prompt(chunk[0], vendor, settings.retrieval_top_k)
 
-        proposals = provider.interpret(vendor, chunk, examples)
+        proposals = provider.interpret(vendor, chunk, examples, chunk_contexts)
         outcome.llm_calls += 1
         outcome.proposals_returned += len(proposals)
 
