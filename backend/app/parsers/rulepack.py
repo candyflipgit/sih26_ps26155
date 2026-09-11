@@ -31,6 +31,10 @@ class BlockStyle(str, Enum):
     FLAT_SET = "flat_set"      # Junos set-format: every line is fully qualified
     CONFIG_END = "config_end"  # FortiOS: config/edit ... next/end
     KEY_PATH = "key_path"      # RouterOS: /path then settings
+    # Structured documents -- cloud security groups, SONiC config_db -- are
+    # flattened into `path = value` lines first, then parsed like any other
+    # vendor. The engine never needs to know the input was not a CLI.
+    JSON = "json"
 
 
 class RuleOrigin(str, Enum):
@@ -119,6 +123,10 @@ class RulePack(BaseModel):
     # admin` looks relevant by context, yet `set vdom "root"` is plumbing. Left
     # unfiltered these bury the Teach-AI queue and understate coverage.
     ignore: list[str] = Field(default_factory=list)
+    # Parameters this class of device cannot have. A cloud security group has
+    # no login banner and no NTP client; its controls for those are
+    # NOT_APPLICABLE, which is a different statement from "could not tell".
+    not_applicable: list[str] = Field(default_factory=list)
 
     @property
     def ignore_patterns(self) -> list[re.Pattern[str]]:
@@ -131,6 +139,18 @@ class RulePack(BaseModel):
             if rule.id in seen:
                 raise ValueError(f"{self.vendor}: duplicate rule id {rule.id!r}")
             seen.add(rule.id)
+
+        # A parameter declared not applicable must not also be produced by the
+        # pack -- that contradiction is an authoring error worth catching at load.
+        produced = {r.parameter for r in self.rules} | {d.parameter for d in self.defaults}
+        for parameter in self.not_applicable:
+            if parameter not in PARAMETER_INDEX:
+                raise ValueError(f"{self.vendor}: not_applicable '{parameter}' is not canonical")
+            if parameter in produced:
+                raise ValueError(
+                    f"{self.vendor}: '{parameter}' is declared not applicable but a rule "
+                    f"or default produces it"
+                )
         return self
 
     @property

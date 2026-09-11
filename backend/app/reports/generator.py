@@ -347,7 +347,7 @@ class ReportBuilder:
         ]))
         return table
 
-    def _detail(self, finding, vendor: str, width: float) -> list:
+    def _detail(self, finding, vendor: str, width: float, os_version: str | None = None) -> list:
         style = self.styles
         tone = _hex(SEVERITY_COLOR[finding.severity])
 
@@ -401,7 +401,7 @@ class ReportBuilder:
             ))
 
         if finding.status is Status.FAIL:
-            plan = self.remediation.plan_for(finding.remediation_id, vendor)
+            plan = self.remediation.plan_for(finding.remediation_id, vendor, os_version)
             if plan is not None:
                 block.append(Spacer(1, 3))
                 if plan.vendor_specific and plan.commands:
@@ -425,6 +425,10 @@ class ReportBuilder:
                     block.append(command_table)
                     if plan.note:
                         block.append(Paragraph(f"Note. {_esc(plan.note)}", style["small"]))
+                    if plan.version_basis:
+                        block.append(Paragraph(
+                            f"<i>{_esc(plan.version_basis)}</i>", style["small"]
+                        ))
                 else:
                     block.append(Paragraph(
                         f"<b>Remediation guidance.</b> {_esc(plan.guidance)} "
@@ -548,7 +552,9 @@ class ReportBuilder:
             ))
             story.append(Spacer(1, 5))
             for finding in failures:
-                story.append(KeepTogether(self._detail(finding, result.detection.vendor, width)))
+                story.append(KeepTogether(self._detail(
+                    finding, result.detection.vendor, width, result.normalized.device.os_version
+                )))
 
         undetermined = [f for f in result.scan.findings if f.status is Status.UNKNOWN]
         if undetermined:

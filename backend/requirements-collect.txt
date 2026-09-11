@@ -1,0 +1,7 @@
+# Optional: live configuration collection over SSH.
+#
+# Not needed to run the platform. Uploaded configuration files are the primary
+# input; install this only to pull configurations directly from devices via
+# POST /api/v1/collect. Verified installing cleanly on Python 3.13.
+
+netmiko==4.7.0

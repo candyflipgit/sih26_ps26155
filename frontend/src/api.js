@@ -40,6 +40,23 @@ export const api = {
     return request(`/configs/upload?framework=${framework}`, { method: 'POST', body: form })
   },
 
+  uploadBatch: (files, framework = 'ALL') => {
+    const form = new FormData()
+    for (const file of files) form.append('files', file)
+    return request(`/configs/upload-batch?framework=${framework}`, { method: 'POST', body: form })
+  },
+
+  // Returns a Blob (a zip of one PDF per device), not JSON.
+  batchReports: async (configIds) => {
+    const response = await fetch(`${BASE}/batch/reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config_ids: configIds }),
+    })
+    if (!response.ok) throw new Error(`Report bundle failed (${response.status})`)
+    return response.blob()
+  },
+
   listAnalyses: () => request('/analyses'),
   getAnalysis: (id) => request(`/analyses/${id}`),
   rescan: (id, framework = 'ALL') =>

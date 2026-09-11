@@ -127,6 +127,9 @@ class NormalizedConfig(BaseModel):
     device: DeviceIdentity
     facts: list[NormalizedFact] = Field(default_factory=list)
     unknown_commands: list[UnknownCommand] = Field(default_factory=list)
+    # Parameters the device class cannot have, as declared by its rule pack.
+    # The compliance engine reports matching controls as NOT_APPLICABLE.
+    not_applicable: list[str] = Field(default_factory=list)
     stats: NormalizationStats = Field(default_factory=NormalizationStats)
     normalized_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

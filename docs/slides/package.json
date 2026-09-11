@@ -1,0 +1,11 @@
+{
+  "name": "netbaseline-slides",
+  "private": true,
+  "description": "Generates docs/NetBaseline_AI_Technical_Presentation.pptx. Run: npm install && node build.js",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "vendor": "aws_security_group",
+  "display_name": "AWS VPC Security Group",
+  "os_family": "AWS EC2",
+  "block_style": "json",
+  "comment_prefixes": [],
+  "signatures": {
+    "\"IpPermissions\"": 4.0,
+    "\"SecurityGroups\"": 3.0,
+    "\"IpPermissionsEgress\"": 2.5,
+    "\"GroupId\"": 2.5,
+    "\"CidrIp\"": 2.5,
+    "\"FromPort\"": 2.0,
+    "\"VpcId\"": 1.5
+  },
+  "identity": [
+    { "field": "hostname",      "regex": "\"GroupName\"\\s*:\\s*\"([^\"]+)\"" },
+    { "field": "serial_number", "regex": "\"GroupId\"\\s*:\\s*\"(sg-[0-9a-f]+)\"" }
+  ],
+
+  "rules": [
+    { "id": "aws-telnet-reachable",
+      "regex": "^\\S*ippermissions\\[\\d+\\] (?=.*\\bcovers=\\S*\\b23\\b)",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:true",
+      "description": "An inbound rule's port range covers TCP 23, so Telnet is reachable." },
+
+    { "id": "aws-mgmt-open-to-world",
+      "regex": "^\\S*ippermissions\\[\\d+\\] (?=.*\\bcovers=\\S*\\b(22|3389)\\b)(?=.*\\bexposure=world\\b)",
+      "parameter": "access.management_acl.enabled", "value_rule": "literal:false",
+      "description": "SSH or RDP is reachable from the whole internet (0.0.0.0/0 or ::/0)." },
+
+    { "id": "aws-mgmt-restricted",
+      "regex": "^\\S*ippermissions\\[\\d+\\] (?=.*\\bcovers=\\S*\\b(22|3389)\\b)",
+      "parameter": "access.management_acl.enabled", "value_rule": "literal:true",
+      "description": "SSH or RDP is permitted only from specific source ranges or security groups." }
+  ],
+
+  "defaults": [
+    { "parameter": "management.telnet.enabled", "value": false,
+      "rationale": "No inbound rule's port range covers TCP 23." },
+    { "parameter": "access.management_acl.enabled", "value": true,
+      "rationale": "No inbound rule exposes SSH (22) or RDP (3389) to 0.0.0.0/0 or ::/0, including via port ranges or all-protocol rules." }
+  ],
+
+  "not_applicable": [
+    "management.ssh.enabled",
+    "management.ssh.version",
+    "management.ssh.strong_crypto",
+    "management.http.enabled",
+    "management.https.enabled",
+    "authentication.password.min_length",
+    "authentication.password.encryption_enabled",
+    "authentication.privileged.protected",
+    "authentication.aaa.enabled",
+    "authentication.default_accounts.present",
+    "logging.local.enabled",
+    "logging.remote_syslog.enabled",
+    "logging.admin_actions.enabled",
+    "time.ntp.enabled",
+    "time.ntp.authenticated",
+    "snmp.enabled",
+    "snmp.insecure_version_enabled",
+    "snmp.default_community.present",
+    "access.idle_timeout.seconds",
+    "access.login_banner.present",
+    "services.source_routing.enabled",
+    "services.insecure_smallservers.enabled"
+  ],
+
+  "ignore": [
+    "^(?!\\S*ippermissions\\[\\d+\\] )",
+    "^\\S*ippermissions\\[\\d+\\] (?!.*\\bcovers=)"
+  ]
+}

@@ -172,8 +172,6 @@ def _compare(operator: Operator, actual: Any, expected: Any) -> bool:
 
 def evaluate_rule(rule: ComplianceRule, normalized: NormalizedConfig) -> Finding:
     """Evaluate one rule. Always returns a Finding, never raises."""
-    fact = normalized.get(rule.parameter)
-
     base = dict(
         rule_id=rule.id,
         title=rule.title,
@@ -188,6 +186,21 @@ def evaluate_rule(rule: ComplianceRule, normalized: NormalizedConfig) -> Finding
         rule_version=rule.version,
     )
 
+    # Not every control applies to every class of device: a cloud security
+    # group has no login banner and no NTP client. UNKNOWN would read as "could
+    # not tell"; NOT_APPLICABLE says "does not arise", and keeps the control out
+    # of both the score and the coverage figure.
+    if rule.parameter in normalized.not_applicable:
+        return Finding(
+            **base,
+            status=Status.NOT_APPLICABLE,
+            normalisation_rationale=(
+                "This control does not apply to this class of device, as declared by its "
+                "rule pack."
+            ),
+        )
+
+    fact = normalized.get(rule.parameter)
     if fact is None:
         return Finding(
             **base,

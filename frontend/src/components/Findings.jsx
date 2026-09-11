@@ -125,13 +125,30 @@ export default function Findings({ analysis, goTo }) {
         </div>
       ) : null}
 
+      {summary.not_applicable > 0 ? (
+        <div className="mb-4">
+          <Banner tone="info">
+            <strong>
+              {summary.not_applicable} control{summary.not_applicable === 1 ? ' does' : 's do'} not
+              apply to this class of device.
+            </strong>{' '}
+            A {analysis.detection.display_name} has no login banner, NTP client or local accounts,
+            so those controls are reported as not applicable — not as undetermined, and not as
+            failures. They are excluded from both the score and the coverage figure.
+          </Banner>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
         <div>
-          <div className="mb-2 flex gap-1.5">
+          <div className="mb-2 flex flex-wrap gap-1.5">
             {[
               ['FAIL', `Failed (${summary.failed})`],
               ['PASS', `Passed (${summary.passed})`],
               ['UNKNOWN', `Undetermined (${summary.unknown})`],
+              ...(summary.not_applicable
+                ? [['NOT_APPLICABLE', `Not applicable (${summary.not_applicable})`]]
+                : []),
               ['ALL', `All (${findings.length})`],
             ].map(([id, label]) => (
               <button
@@ -344,6 +361,9 @@ function Detail({ finding, analysis }) {
               <Code>{plan.commands.join('\n')}</Code>
               {plan.note ? (
                 <p className="mt-1.5 text-[11.5px] leading-relaxed text-faint">{plan.note}</p>
+              ) : null}
+              {plan.version_basis ? (
+                <p className="mt-1 text-[11px] leading-relaxed text-accent">{plan.version_basis}</p>
               ) : null}
               <p className="mt-1.5 text-[11px] leading-relaxed text-faint">{plan.warning}</p>
             </>

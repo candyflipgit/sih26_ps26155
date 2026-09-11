@@ -11,6 +11,7 @@ that feed the Teach-AI queue, which is where the AI layer earns its place.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Iterable, Iterator
 
@@ -47,7 +48,7 @@ _SECURITY_TOKENS = frozenset({
     "http", "https", "idle-timeout", "kex", "key", "ldap", "log", "logging", "login",
     "motd", "ntp", "passwd", "password", "privilege", "radius", "secret", "service",
     "session", "snmp", "ssh", "ssl", "tacacs", "telnet", "timeout", "tls", "trusted",
-    "user", "username", "vty", "web-management", "wheel",
+    "user", "username", "vty", "web-management", "wheel", "ippermissions",
 })
 
 _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
@@ -156,6 +157,11 @@ def iter_significant_lines(config: str, pack: RulePack) -> Iterator[ParsedLine]:
                 key_path = head.lower()
             context = key_path
 
+        elif style is BlockStyle.JSON:
+            # Flattened lines begin with their document path, which is the
+            # natural block context for structured input.
+            context = lowered.split(" ", 1)[0]
+
         else:  # FLAT_SET -- Junos set-format lines are fully qualified already
             context = ""
 
@@ -167,6 +173,110 @@ def iter_significant_lines(config: str, pack: RulePack) -> Iterator[ParsedLine]:
             continue
 
         yield ParsedLine(number, stripped, canonical, slots, context, is_header)
+
+
+
+# --- structured input -------------------------------------------------------
+
+# Well-known management ports and the protocol each rides on. A rule is judged on
+# whether its port *range* covers one of these, not on an exact port, because
+# 0-65535 exposes SSH just as surely as 22-22 does.
+_MANAGEMENT_PORTS = {22: "tcp", 23: "tcp", 3389: "tcp"}
+_ALL_PROTOCOLS = {"-1", "all"}
+_PROTOCOL_ALIASES = {"6": "tcp", "17": "udp"}
+_WORLD = {"0.0.0.0/0", "::/0"}
+
+
+def _scalar(value: object) -> bool:
+    return value is None or isinstance(value, (str, int, float, bool))
+
+
+def _token(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    # One token per value, so free text in a description cannot split a line
+    # into pieces a rule might read as separate fields.
+    return str(value).replace(" ", "_")
+
+
+def _port_enrichment(node: dict) -> list[str]:
+    """Derive `covers=` and `exposure=` tokens for a port-range record.
+
+    Keyed on the FromPort / ToPort / IpProtocol convention, not on a vendor
+    name. Without it a rule could only match exact ports, and an all-protocol or
+    0-65535 rule -- the most dangerous kind -- would read as exposing nothing.
+    """
+    tokens: list[str] = []
+    protocol = str(node.get("IpProtocol", "")).lower()
+    protocol = _PROTOCOL_ALIASES.get(protocol, protocol)
+    low, high = node.get("FromPort"), node.get("ToPort")
+
+    covered: list[int] = []
+    for port, port_protocol in _MANAGEMENT_PORTS.items():
+        if protocol in _ALL_PROTOCOLS:
+            covered.append(port)
+        elif protocol == port_protocol and isinstance(low, int) and isinstance(high, int):
+            if low <= port <= high:
+                covered.append(port)
+    if covered:
+        tokens.append("covers=" + ",".join(str(p) for p in covered))
+
+    sources: list[str] = []
+    for key, field in (("IpRanges", "CidrIp"), ("Ipv6Ranges", "CidrIpv6")):
+        for entry in node.get(key) or []:
+            if isinstance(entry, dict) and entry.get(field):
+                sources.append(str(entry[field]))
+    if node.get("UserIdGroupPairs"):
+        sources.append("security-group")
+    if sources:
+        tokens.append("exposure=" + ("world" if _WORLD & set(sources) else "restricted"))
+    return tokens
+
+
+def flatten_json(text: str) -> str:
+    """Render a JSON document as `path key=value ...` lines.
+
+    Each object with scalar fields becomes one line carrying its own scalars and
+    those of the records one level below it. Fields that belong together -- a
+    port range and the addresses it is open to -- therefore stay on one line,
+    where a single rule can see both. Deeper structure gets lines of its own.
+
+    Anything that is not valid JSON is returned unchanged and parsed as text.
+    """
+    try:
+        document = json.loads(text)
+    except (ValueError, TypeError):
+        return text
+
+    lines: list[str] = []
+
+    def walk(node: object, path: str) -> None:
+        if isinstance(node, dict):
+            own = [f"{k}={_token(v)}" for k, v in node.items() if _scalar(v)]
+            nested: list[str] = []
+            for key, value in node.items():
+                if not isinstance(value, list):
+                    continue
+                for item in value:
+                    if _scalar(item):
+                        nested.append(f"{key}={_token(item)}")
+                    elif isinstance(item, dict):
+                        nested.extend(
+                            f"{key}.{k}={_token(v)}" for k, v in item.items() if _scalar(v)
+                        )
+            if own:
+                lines.append(" ".join([path or "$", *own, *nested, *_port_enrichment(node)]))
+            for key, value in node.items():
+                if isinstance(value, (dict, list)):
+                    walk(value, f"{path}.{key}" if path else key)
+        elif isinstance(node, list):
+            for index, item in enumerate(node):
+                walk(item, f"{path}[{index}]")
+
+    walk(document, "")
+    return "\n".join(lines)
 
 
 def _rule_matches(rule: MappingRule, line: ParsedLine) -> tuple[bool, list[str]]:
@@ -219,8 +329,11 @@ def parse(config: str, pack: RulePack) -> NormalizedConfig:
 
     rules = pack.rules
     ignore = pack.ignore_patterns
+    # Structured input is flattened to lines first; after that the engine
+    # cannot tell it was ever anything but a CLI.
+    source = flatten_json(config) if pack.block_style is BlockStyle.JSON else config
 
-    for line in iter_significant_lines(config, pack):
+    for line in iter_significant_lines(source, pack):
         muted = any(p.search(line.canonical) or p.search(line.flat) for p in ignore)
         relevant = not line.is_block_header and is_security_relevant(line.canonical, line.context)
 
@@ -302,6 +415,7 @@ def parse(config: str, pack: RulePack) -> NormalizedConfig:
         device=extract_identity(config, pack),
         facts=facts,
         unknown_commands=unknowns,
+        not_applicable=list(pack.not_applicable),
         stats=NormalizationStats(
             total_lines=len(config.splitlines()),
             significant_lines=significant,

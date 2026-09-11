@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { Banner, Button, Card, Code, Empty, ScoreRing, SectionTitle, Spinner, Stat } from './ui'
+import BatchResults from './BatchResults'
 
 const FRAMEWORKS = [
   { id: 'ALL', label: 'All frameworks' },
@@ -14,6 +15,8 @@ const SAMPLE_META = {
   'cisco_core_switch.cfg': { name: 'Cisco Catalyst 9300', role: 'Core switch', glyph: '⬢' },
   'juniper_edge_srx.conf': { name: 'Juniper SRX 340', role: 'Edge firewall', glyph: '⬣' },
   'fortinet_perimeter_fw.conf': { name: 'FortiGate 100F', role: 'Perimeter firewall', glyph: '⬡' },
+  'paloalto_datacenter_fw.conf': { name: 'Palo Alto PA-3220', role: 'Datacentre firewall', glyph: '⬟' },
+  'aws_web_tier_sg.json': { name: 'AWS Security Group', role: 'Cloud firewall · JSON', glyph: '☁' },
   'mikrotik_branch_router.rsc': { name: 'MikroTik RB4011', role: 'Unsupported vendor', glyph: '◈', unknown: true },
 }
 
@@ -24,6 +27,7 @@ export default function Analyze({ meta, analysis, onAnalysis, goTo, onError }) {
   const [stages, setStages] = useState([])
   const [pasted, setPasted] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [batch, setBatch] = useState(null)
   const fileInput = useRef(null)
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export default function Analyze({ meta, analysis, onAnalysis, goTo, onError }) {
       setBusy(true)
       setStages([])
       onError(null)
+      setBatch(null)
       try {
         const result = await fn()
         onAnalysis(result)
@@ -84,11 +89,35 @@ export default function Analyze({ meta, analysis, onAnalysis, goTo, onError }) {
     [onAnalysis, onError, revealStages],
   )
 
+  // One file keeps the detailed single-device flow; several files go through
+  // the batch endpoint and produce a fleet table instead.
+  const ingest = useCallback(
+    async (fileList) => {
+      const files = Array.from(fileList ?? [])
+      if (files.length === 0) return
+      if (files.length === 1) {
+        setBatch(null)
+        run(() => api.upload(files[0], framework))
+        return
+      }
+      setBusy(true)
+      setStages([])
+      onError(null)
+      try {
+        setBatch(await api.uploadBatch(files, framework))
+      } catch (err) {
+        onError(err.message)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [framework, onError, run],
+  )
+
   const onDrop = (event) => {
     event.preventDefault()
     setDragging(false)
-    const file = event.dataTransfer.files?.[0]
-    if (file) run(() => api.upload(file, framework))
+    ingest(event.dataTransfer.files)
   }
 
   return (
@@ -171,16 +200,20 @@ export default function Analyze({ meta, analysis, onAnalysis, goTo, onError }) {
               <input
                 ref={fileInput}
                 type="file"
+                multiple
                 className="hidden"
                 accept=".cfg,.conf,.txt,.rsc,.json,.log"
                 onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) run(() => api.upload(file, framework))
+                  ingest(e.target.files)
                   e.target.value = ''
                 }}
               />
-              <div className="text-sm text-muted">Drop a configuration file, or click to browse</div>
-              <div className="mt-1 text-[11px] text-faint">.cfg · .conf · .txt · .rsc · any vendor</div>
+              <div className="text-sm text-muted">
+                Drop one or many configuration files, or click to browse
+              </div>
+              <div className="mt-1 text-[11px] text-faint">
+                .cfg · .conf · .txt · .rsc · .json · any vendor · up to 50 at once
+              </div>
             </div>
 
             <details className="mt-2 group">
@@ -208,6 +241,10 @@ export default function Analyze({ meta, analysis, onAnalysis, goTo, onError }) {
         </div>
 
         <div>
+          {batch && !busy ? (
+            <BatchResults batch={batch} onAnalysis={onAnalysis} goTo={goTo} onError={onError} />
+          ) : (
+          <>
           <SectionTitle hint={busy ? 'running' : analysis ? 'complete' : 'idle'}>Pipeline</SectionTitle>
           <Card className="p-4">
             {busy ? (
@@ -243,6 +280,8 @@ export default function Analyze({ meta, analysis, onAnalysis, goTo, onError }) {
           </Card>
 
           {analysis && !busy ? <ResultSummary analysis={analysis} goTo={goTo} /> : null}
+          </>
+          )}
         </div>
       </div>
     </div>

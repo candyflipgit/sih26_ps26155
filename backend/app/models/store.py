@@ -167,9 +167,15 @@ class Store:
                     vendors.get(row.vendor_display or row.vendor, 0) + 1
                 )
 
+            # Devices with no decidable controls are excluded from the average;
+            # their 0 is an artefact of 0/0, not a measured posture.
+            judged = [r for r in rows if r.passed + r.failed > 0]
             return {
                 "devices": len(rows),
-                "average_score": round(sum(r.score for r in rows) / len(rows), 1),
+                "devices_judged": len(judged),
+                "average_score": (
+                    round(sum(r.score for r in judged) / len(judged), 1) if judged else 0.0
+                ),
                 "total_failed": sum(r.failed for r in rows),
                 "critical_failures": sum(r.critical_failures for r in rows),
                 "vendors": vendors,

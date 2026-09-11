@@ -16,7 +16,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from app.compliance.remediation import RemediationLibrary, RemediationPlan
 from app.core.config import Settings, get_settings
@@ -208,6 +208,90 @@ async def upload(
     return _run(text, file.filename or "upload.cfg", framework)
 
 
+MAX_BATCH_FILES = 50
+
+
+def _summarise(result: dict[str, Any]) -> dict[str, Any]:
+    """The fields a fleet table needs, without shipping every finding back."""
+    summary = result["scan"]["summary"]
+    device = result["normalized"]["device"]
+    return {
+        "config_id": result["config_id"],
+        "filename": result["filename"],
+        "hostname": device.get("hostname"),
+        "model": device.get("model"),
+        "serial_number": device.get("serial_number"),
+        "os_version": device.get("os_version"),
+        "vendor": result["detection"]["vendor"],
+        "vendor_display": result["detection"]["display_name"],
+        "score": summary["score"],
+        "coverage": summary["coverage"],
+        "passed": summary["passed"],
+        "failed": summary["failed"],
+        "unknown": summary["unknown"],
+        "critical_failures": summary["failed_by_severity"]["critical"],
+        "queue": len(result["normalized"]["unknown_commands"]),
+        "total_ms": result["timings"]["total_ms"],
+    }
+
+
+@app.post("/api/v1/configs/upload-batch")
+async def upload_batch(
+    files: list[UploadFile] = File(...),
+    framework: str = "ALL",
+) -> dict[str, Any]:
+    """Analyse many configurations in one request.
+
+    Each file is independent: one unreadable or empty file is reported in
+    `errors` and never aborts the rest of the batch, because an auditor
+    dropping a folder of fifty configs should not lose forty-nine results to
+    one bad file.
+    """
+    if len(files) > MAX_BATCH_FILES:
+        raise HTTPException(413, f"At most {MAX_BATCH_FILES} files per batch")
+
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+
+    for upload_file in files:
+        name = upload_file.filename or "upload.cfg"
+        try:
+            payload = await upload_file.read()
+            if len(payload) > MAX_UPLOAD_BYTES:
+                raise ValueError(f"exceeds {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
+            if not payload.strip():
+                raise ValueError("file is empty")
+            text = payload.decode("utf-8", errors="replace")
+            results.append(_summarise(_run(text, name, framework)))
+        except Exception as exc:  # isolate per-file failures
+            logger.warning("batch: %s failed: %s", name, exc)
+            errors.append({"filename": name, "error": str(exc)})
+
+    results.sort(key=lambda r: (r["score"], -r["critical_failures"]))
+
+    # A device with no decidable controls (an unrecognised vendor, before any
+    # teaching) has a score of 0 only because 0/0 has to print as something.
+    # Averaging it in would report an undetermined device as a failing one --
+    # the same false positive the engine refuses to invent for a single control.
+    judged = [r for r in results if r["passed"] + r["failed"] > 0]
+    return {
+        "framework": framework,
+        "analysed": len(results),
+        "failed_files": len(errors),
+        "results": results,
+        "errors": errors,
+        "fleet": {
+            "average_score": (
+                round(sum(r["score"] for r in judged) / len(judged), 1) if judged else 0.0
+            ),
+            "devices_judged": len(judged),
+            "critical_failures": sum(r["critical_failures"] for r in results),
+            "devices_with_critical": sum(1 for r in results if r["critical_failures"]),
+            "unknown_vendors": sum(1 for r in results if r["vendor"] == "unknown"),
+        },
+    }
+
+
 @app.post("/api/v1/configs/analyze")
 def analyze_text(request: AnalyzeTextRequest) -> dict[str, Any]:
     if not request.text.strip():
@@ -270,6 +354,65 @@ def rescan(
     return _run(record.raw_config, record.filename, framework)
 
 
+# --- live collection (optional) --------------------------------------------
+
+class CollectRequest(BaseModel):
+    """Connection details for one read-only SSH session.
+
+    The password is a SecretStr, so it prints as asterisks in any repr or log.
+    """
+
+    host: str
+    platform: str
+    username: str
+    password: SecretStr
+    port: int = Field(22, ge=1, le=65535)
+    timeout_seconds: float = Field(20.0, ge=1, le=120)
+    framework: str = "ALL"
+
+
+@app.get("/api/v1/collect/platforms")
+def collect_platforms() -> dict[str, Any]:
+    from app.services.collector import PLATFORMS, netmiko_available
+
+    return {
+        "available": netmiko_available(),
+        "platforms": [
+            {"vendor": vendor, "commands": commands}
+            for vendor, (_, commands) in PLATFORMS.items()
+        ],
+    }
+
+
+@app.post("/api/v1/collect")
+def collect_live(request: CollectRequest) -> dict[str, Any]:
+    """Pull a configuration from a live device over SSH, then analyse it.
+
+    Optional, and off the critical path by design. Credentials are used for this
+    one session and are never stored, logged, or echoed back in any response.
+    """
+    from app.services import collector
+
+    try:
+        collected = collector.collect(
+            request.host, request.platform, request.username, request.password,
+            request.port, request.timeout_seconds,
+        )
+    except collector.CollectorUnavailable as exc:
+        raise HTTPException(501, str(exc)) from None
+    except collector.CollectionError as exc:
+        raise HTTPException(exc.status, str(exc)) from None
+
+    result = _run(collected.text, f"{request.host}-live.cfg", request.framework)
+    result["collection"] = {
+        "host": request.host,
+        "platform": request.platform,
+        "commands": collected.commands,
+        "duration_ms": collected.duration_ms,
+    }
+    return result
+
+
 # --- findings and remediation ----------------------------------------------
 
 @app.get("/api/v1/analyses/{config_id}/remediation/{rule_id}")
@@ -285,7 +428,9 @@ def remediation_for(config_id: str, rule_id: str, store: Store = Depends(get_sto
     if finding is None:
         raise HTTPException(404, "No such finding in that analysis")
 
-    plan = state["remediation"].plan_for(finding.get("remediation_id"), record.vendor)
+    plan = state["remediation"].plan_for(
+        finding.get("remediation_id"), record.vendor, record.os_version
+    )
     if plan is None:
         raise HTTPException(404, "No remediation template for that control")
     return plan
@@ -423,6 +568,61 @@ def generate_report(
         "size_bytes": destination.stat().st_size,
         "download_url": f"/api/v1/reports/{config_id}/download",
     }
+
+
+class BatchReportRequest(BaseModel):
+    config_ids: list[str]
+
+
+# Deliberately not /reports/batch: that would be shadowed by the earlier
+# /reports/{config_id} route, which would read "batch" as an analysis id.
+@app.post("/api/v1/batch/reports")
+def generate_batch_reports(
+    request: BatchReportRequest,
+    store: Store = Depends(get_store),
+    settings: Settings = Depends(get_config),
+) -> FileResponse:
+    """One PDF per device, delivered as a single zip.
+
+    The problem statement asks for a single comprehensive report *per device*;
+    a batch upload therefore produces a set of reports, not one merged document.
+    """
+    import zipfile
+    from datetime import datetime, timezone
+
+    from app.services.analysis import AnalysisResult
+
+    if not request.config_ids:
+        raise HTTPException(422, "No analyses selected")
+    if len(request.config_ids) > MAX_BATCH_FILES:
+        raise HTTPException(413, f"At most {MAX_BATCH_FILES} reports per batch")
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    archive = settings.report_dir / f"batch-{stamp}.zip"
+    written = 0
+
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        used_names: set[str] = set()
+        for config_id in request.config_ids:
+            record = store.get_analysis(config_id)
+            if record is None:
+                continue
+            pdf = settings.report_dir / f"{config_id}.pdf"
+            state["reports"].build(AnalysisResult.model_validate(record.result), pdf)
+
+            label = (record.hostname or Path(record.filename).stem or config_id).replace("/", "_")
+            name = f"compliance-report-{label}.pdf"
+            if name in used_names:  # two devices with one hostname must not overwrite
+                name = f"compliance-report-{label}-{config_id[4:12]}.pdf"
+            used_names.add(name)
+            bundle.write(pdf, name)
+            written += 1
+
+    if written == 0:
+        archive.unlink(missing_ok=True)
+        raise HTTPException(404, "None of the selected analyses exist")
+
+    return FileResponse(archive, media_type="application/zip", filename=archive.name)
 
 
 @app.get("/api/v1/reports/{config_id}/download")

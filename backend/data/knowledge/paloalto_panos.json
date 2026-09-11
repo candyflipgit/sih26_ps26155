@@ -1,0 +1,170 @@
+{
+  "vendor": "paloalto_panos",
+  "display_name": "Palo Alto Networks (PAN-OS)",
+  "os_family": "PAN-OS",
+  "block_style": "flat_set",
+  "comment_prefixes": ["#"],
+  "signatures": {
+    "set deviceconfig system": 4.0,
+    "set mgt-config": 3.5,
+    "set shared log-settings": 2.5,
+    "set rulebase security": 3.0,
+    "set network interface ethernet": 2.0,
+    "sw-version": 2.5,
+    "set zone ": 1.5,
+    "set deviceconfig setting management": 2.5
+  },
+  "identity": [
+    { "field": "hostname",      "regex": "^hostname:\\s*(\\S+)|set deviceconfig system hostname\\s+\"?([\\w.-]+)\"?" },
+    { "field": "os_version",    "regex": "^sw-version:\\s*(\\S+)" },
+    { "field": "model",         "regex": "^model:\\s*(\\S+)" },
+    { "field": "serial_number", "regex": "^serial:\\s*(\\S+)" }
+  ],
+
+  "rules": [
+    { "id": "panos-telnet-on", "regex": "^set deviceconfig system service disable-telnet no\\b",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:true",
+      "description": "Telnet is explicitly re-enabled on the management interface." },
+
+    { "id": "panos-telnet-off", "regex": "^set deviceconfig system service disable-telnet yes\\b",
+      "parameter": "management.telnet.enabled", "value_rule": "literal:false",
+      "description": "Telnet is disabled on the management interface." },
+
+    { "id": "panos-http-on", "regex": "^set deviceconfig system service disable-http no\\b",
+      "parameter": "management.http.enabled", "value_rule": "literal:true",
+      "description": "Plaintext HTTP management is explicitly enabled." },
+
+    { "id": "panos-http-off", "regex": "^set deviceconfig system service disable-http yes\\b",
+      "parameter": "management.http.enabled", "value_rule": "literal:false",
+      "description": "Plaintext HTTP management is disabled." },
+
+    { "id": "panos-https-on", "regex": "^set deviceconfig system service disable-https no\\b",
+      "parameter": "management.https.enabled", "value_rule": "literal:true",
+      "description": "HTTPS management is enabled." },
+
+    { "id": "panos-https-off", "regex": "^set deviceconfig system service disable-https yes\\b",
+      "parameter": "management.https.enabled", "value_rule": "literal:false",
+      "description": "HTTPS management is disabled." },
+
+    { "id": "panos-ssh-on", "regex": "^set deviceconfig system service disable-ssh no\\b",
+      "parameter": "management.ssh.enabled", "value_rule": "literal:true",
+      "description": "SSH management is enabled." },
+
+    { "id": "panos-ssh-off", "regex": "^set deviceconfig system service disable-ssh yes\\b",
+      "parameter": "management.ssh.enabled", "value_rule": "literal:false",
+      "description": "SSH management is disabled." },
+
+    { "id": "panos-ssh-ciphers", "regex": "^set deviceconfig system ssh ciphers\\b(?!.*(3des|cbc))",
+      "parameter": "management.ssh.strong_crypto", "value_rule": "literal:true",
+      "description": "The management SSH cipher list is explicitly restricted and excludes 3DES and CBC modes." },
+
+    { "id": "panos-permitted-ip", "regex": "^set deviceconfig system permitted-ip\\b",
+      "parameter": "access.management_acl.enabled", "value_rule": "literal:true",
+      "description": "Management access is limited to permitted source addresses." },
+
+    { "id": "panos-banner", "regex": "^set deviceconfig system login-banner\\b",
+      "parameter": "access.login_banner.present", "value_rule": "literal:true",
+      "description": "A login banner is presented before authentication." },
+
+    { "id": "panos-idle-timeout", "template": "set deviceconfig setting management idle-timeout <NUM>",
+      "parameter": "access.idle_timeout.seconds", "value_rule": "slot:0:minutes_to_seconds",
+      "description": "Administrative idle timeout, configured in minutes." },
+
+    { "id": "panos-password-minlen", "template": "set mgt-config password-complexity minimum-length <NUM>",
+      "parameter": "authentication.password.min_length", "value_rule": "slot:0",
+      "description": "Minimum password length enforced by the password complexity policy." },
+
+    { "id": "panos-default-account", "regex": "^set mgt-config users (admin|root|guest)\\b",
+      "parameter": "authentication.default_accounts.present", "value_rule": "literal:true",
+      "description": "The factory-default administrator account name is still configured." },
+
+    { "id": "panos-aaa", "regex": "^set shared server-profile (radius|tacplus|ldap)\\b",
+      "parameter": "authentication.aaa.enabled", "value_rule": "literal:true",
+      "description": "A centralised RADIUS, TACACS+ or LDAP authentication server profile is configured." },
+
+    { "id": "panos-ntp-auth", "regex": "^set deviceconfig system ntp-servers \\S+ authentication-type (symmetric-key|autokey)\\b",
+      "parameter": "time.ntp.authenticated", "value_rule": "literal:true",
+      "description": "NTP associations are authenticated." },
+
+    { "id": "panos-ntp-noauth", "regex": "^set deviceconfig system ntp-servers \\S+ authentication-type none\\b",
+      "parameter": "time.ntp.authenticated", "value_rule": "literal:false",
+      "description": "NTP authentication is explicitly set to none." },
+
+    { "id": "panos-ntp-server", "regex": "^set deviceconfig system ntp-servers \\S+ ntp-server-address\\b",
+      "parameter": "time.ntp.enabled", "value_rule": "literal:true",
+      "description": "An NTP time source is configured." },
+
+    { "id": "panos-snmp-default-community", "regex": "snmp-community-string (public|private)\\b",
+      "parameter": "snmp.default_community.present", "value_rule": "literal:true",
+      "description": "A well-known default SNMP community string is configured." },
+
+    { "id": "panos-snmp-insecure", "regex": "^set deviceconfig system snmp-setting access-setting version v(1|2c)\\b",
+      "parameter": "snmp.insecure_version_enabled", "value_rule": "literal:true",
+      "description": "SNMP v1/v2c access is configured, which authenticates with a cleartext community." },
+
+    { "id": "panos-snmp-on", "regex": "^set deviceconfig system service disable-snmp no\\b",
+      "parameter": "snmp.enabled", "value_rule": "literal:true",
+      "description": "The SNMP service is enabled on the management interface." },
+
+    { "id": "panos-syslog", "regex": "^set shared log-settings syslog\\b",
+      "parameter": "logging.remote_syslog.enabled", "value_rule": "literal:true",
+      "description": "A syslog server profile forwards logs to an external collector." },
+
+    { "id": "panos-config-log", "regex": "^set shared log-settings config\\b",
+      "parameter": "logging.admin_actions.enabled", "value_rule": "literal:true",
+      "description": "Configuration logs, which record administrative changes, are forwarded." }
+  ],
+
+  "defaults": [
+    { "parameter": "management.telnet.enabled", "value": false,
+      "rationale": "No statement re-enables Telnet; current PAN-OS releases disable it on the management interface by default." },
+    { "parameter": "management.http.enabled", "value": false,
+      "rationale": "No statement re-enables plaintext HTTP; current PAN-OS releases disable it on the management interface by default." },
+    { "parameter": "management.https.enabled", "value": true,
+      "rationale": "HTTPS management is enabled by default and no statement disables it." },
+    { "parameter": "management.ssh.enabled", "value": true,
+      "rationale": "SSH management is enabled by default and no statement disables it." },
+    { "parameter": "management.ssh.strong_crypto", "value": false,
+      "rationale": "No explicit management SSH cipher restriction is configured." },
+    { "parameter": "access.management_acl.enabled", "value": false,
+      "rationale": "No permitted-ip entry restricts which sources may reach the management interface." },
+    { "parameter": "access.login_banner.present", "value": false,
+      "rationale": "No login banner is configured." },
+    { "parameter": "access.idle_timeout.seconds", "value": 3600,
+      "rationale": "No explicit idle timeout is set; PAN-OS applies its 60 minute default." },
+    { "parameter": "authentication.aaa.enabled", "value": false,
+      "rationale": "No RADIUS, TACACS+ or LDAP server profile is configured." },
+    { "parameter": "authentication.default_accounts.present", "value": false,
+      "rationale": "No well-known default account name appears in the configuration." },
+    { "parameter": "authentication.password.encryption_enabled", "value": true,
+      "rationale": "PAN-OS stores administrator passwords as hashes (phash) rather than in cleartext." },
+    { "parameter": "authentication.privileged.protected", "value": true,
+      "rationale": "PAN-OS administrator roles are protected by hashed credentials; there is no reversible privileged password." },
+    { "parameter": "time.ntp.enabled", "value": false,
+      "rationale": "No NTP server is configured." },
+    { "parameter": "time.ntp.authenticated", "value": false,
+      "rationale": "NTP authentication is not configured." },
+    { "parameter": "logging.remote_syslog.enabled", "value": false,
+      "rationale": "No syslog server profile is configured." },
+    { "parameter": "logging.local.enabled", "value": true,
+      "rationale": "PAN-OS retains traffic, threat, system and configuration logs locally by default." },
+    { "parameter": "logging.admin_actions.enabled", "value": false,
+      "rationale": "Configuration logs are not forwarded off the device." },
+    { "parameter": "snmp.enabled", "value": false,
+      "rationale": "The SNMP service is not enabled on the management interface." },
+    { "parameter": "snmp.insecure_version_enabled", "value": false,
+      "rationale": "No SNMP v1/v2c access setting is configured." },
+    { "parameter": "snmp.default_community.present", "value": false,
+      "rationale": "No default community string is configured." },
+    { "parameter": "services.source_routing.enabled", "value": false,
+      "rationale": "PAN-OS drops source-routed packets by default." },
+    { "parameter": "services.insecure_smallservers.enabled", "value": false,
+      "rationale": "PAN-OS does not provide the legacy TCP/UDP small services." }
+  ],
+
+  "ignore": [
+    "^set deviceconfig system (ip-address|netmask|default-gateway|timezone|domain|dns-setting|update-server|type)\\b",
+    "^set mgt-config users \\S+ (phash|permissions)\\b",
+    "^set deviceconfig system service disable-(icmp|userid-service)\\b"
+  ]
+}
